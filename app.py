@@ -342,10 +342,31 @@ def create_storyboard_ppt(sb_data, topic, tone):
         direction = sc.get("direction_note", "")
         viewer = sc.get("viewer_action", "")
 
-        detail = script
-        if prod and prod != script:
-            detail += f"\n\n[제품/혜택]\n{prod}"
+        # dict/list가 오면 문자열로 변환
+        def _to_str(v):
+            if isinstance(v, dict):
+                return "\n".join([f"{k}: {val}" for k, val in v.items()])
+            if isinstance(v, list):
+                return "\n".join([f"- {item}" if isinstance(item, str) else str(item) for item in v])
+            return str(v) if v else ""
 
+        script = _to_str(script)
+        screen = _to_str(screen)
+        prod = _to_str(prod)
+        direction = _to_str(direction)
+        viewer = _to_str(viewer)
+
+        # 상세 열: 대본 + 제품정보 + 화면표시를 하나로
+        detail_parts = []
+        if script:
+            detail_parts.append(script)
+        if prod and prod != script:
+            detail_parts.append(f"\n[제품/혜택]\n{prod}")
+        if screen:
+            detail_parts.append(f"\n[화면 표시]\n{screen}")
+        detail = "\n".join(detail_parts)
+
+        # 기타 열: 연출 + 시청자 유도
         etc_parts = []
         if direction:
             etc_parts.append(direction)
@@ -353,15 +374,17 @@ def create_storyboard_ppt(sb_data, topic, tone):
             etc_parts.append(f"시청자 유도: {viewer}")
         etc = "\n".join(etc_parts)
 
+        # 구분 열: 줄바꿈 처리
+        section_name = sc.get("section", "")
+        if len(section_name) > 6:
+            words = section_name.split(" ")
+            section_name = "\n".join(words) if len(words) > 1 else section_name
+
         # 4열 테이블 (구분 / 시간 / 상세 / 기타) — 화면 꽉 차게
         rows = [
             ["구분", "시간", "상세", "기타"],
-            [sc.get("section", ""), sc.get("duration", ""), detail, etc],
+            [section_name, sc.get("duration", ""), detail, etc],
         ]
-
-        # 화면 표시 내용이 있으면 별도 행
-        if screen:
-            rows.append(["", "", f"[화면 표시]\n{screen}", ""])
 
         tbl_h = Cm(13.5)
         tbl = sl.shapes.add_table(len(rows), 4, Cm(0.8), Cm(4.5), Cm(32.3), tbl_h)
@@ -871,19 +894,26 @@ if generate_btn and topic:
                 for b in key_benefits:
                     st.markdown(f"- {b}")
 
+    def _preview_str(v):
+        if isinstance(v, dict):
+            return "\n".join([f"- {k}: {val}" for k, val in v.items()])
+        if isinstance(v, list):
+            return "\n".join([f"- {item}" for item in v])
+        return str(v) if v else ""
+
     scenes = sb_data.get("scenes", [])
     for scene in scenes:
         with st.expander(f"구간 {scene['scene_number']}  —  {scene.get('section', '')}  ({scene.get('duration', '')})"):
             st.markdown(f"**쇼호스트 대본:**")
-            st.markdown(scene.get('host_script', ''))
+            st.markdown(_preview_str(scene.get('host_script', '')))
             st.markdown("---")
             col_a, col_b = st.columns(2)
             with col_a:
-                st.markdown(f"**화면 표시:** {scene.get('screen_display', '')}")
-                st.markdown(f"**제품/혜택 정보:** {scene.get('product_info', '')}")
+                st.markdown(f"**화면 표시:** {_preview_str(scene.get('screen_display', ''))}")
+                st.markdown(f"**제품/혜택 정보:** {_preview_str(scene.get('product_info', ''))}")
             with col_b:
-                st.markdown(f"**연출 지시:** {scene.get('direction_note', '')}")
-                st.markdown(f"**시청자 유도:** {scene.get('viewer_action', '')}")
+                st.markdown(f"**연출 지시:** {_preview_str(scene.get('direction_note', ''))}")
+                st.markdown(f"**시청자 유도:** {_preview_str(scene.get('viewer_action', ''))}")
 
     # 7) PPT 다운로드
     with st.spinner("PPT 파일 생성 중..."):
