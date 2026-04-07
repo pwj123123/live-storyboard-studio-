@@ -148,38 +148,79 @@ def fetch_product_info(url):
 
 
 def create_storyboard_ppt(sb_data, topic, tone):
-    """스토리보드 데이터를 PPT 파일로 변환"""
+    """스토리보드 PPT 생성 — 라이브커머스 실무 구성 + 프로페셔널 디자인"""
+    from pptx.oxml.ns import qn
+
     SLIDE_W = Cm(33.87)
     SLIDE_H = Cm(19.05)
-    C_DARK = RGBColor(0x1A, 0x1A, 0x2E)
-    C_ACCENT = RGBColor(0x8B, 0x5C, 0xF6)
+
+    # 색상 팔레트 (PDF 디자인 기반)
+    C_BG = RGBColor(0xE8, 0xE8, 0xE8)
+    C_TEAL = RGBColor(0x3D, 0x9B, 0x8F)
+    C_HEADER_BG = RGBColor(0x88, 0x88, 0x88)
     C_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
     C_BLACK = RGBColor(0x33, 0x33, 0x33)
-    C_GRAY = RGBColor(0x88, 0x88, 0x88)
+    C_DARK = RGBColor(0x22, 0x22, 0x22)
+    C_GRAY_TEXT = RGBColor(0x66, 0x66, 0x66)
+    C_LIGHT_ROW = RGBColor(0xF5, 0xF5, 0xF5)
 
     prs = Presentation()
     prs.slide_width = SLIDE_W
     prs.slide_height = SLIDE_H
 
-    def add_header(slide, text):
-        rect = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Cm(0), Cm(0), SLIDE_W, Cm(2))
-        rect.fill.solid()
-        rect.fill.fore_color.rgb = C_DARK
-        rect.line.fill.background()
-        tf = rect.text_frame
+    def _set_slide_bg(slide, color=C_BG):
+        bg = slide.background
+        fill = bg.fill
+        fill.solid()
+        fill.fore_color.rgb = color
+
+    def _set_cell_bg(cell, hex_color):
+        tcPr = cell._tc.get_or_add_tcPr()
+        for sf in tcPr.findall(qn('a:solidFill')):
+            tcPr.remove(sf)
+        solidFill = tcPr.makeelement(qn('a:solidFill'), {})
+        srgbClr = solidFill.makeelement(qn('a:srgbClr'), {'val': hex_color})
+        solidFill.append(srgbClr)
+        tcPr.append(solidFill)
+
+    def _add_top_bar(slide, left_text, right_text=""):
+        bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Cm(0), Cm(0), SLIDE_W, Cm(1.4))
+        bar.fill.solid()
+        bar.fill.fore_color.rgb = RGBColor(0xD0, 0xD0, 0xD0)
+        bar.line.fill.background()
+        tf = bar.text_frame
         tf.margin_left = Cm(1)
-        tf.margin_top = Cm(0.3)
+        tf.margin_top = Cm(0.2)
+        p = tf.paragraphs[0]
+        p.text = left_text
+        p.font.size = Pt(9)
+        p.font.color.rgb = C_GRAY_TEXT
+        if right_text:
+            tb2 = slide.shapes.add_textbox(Cm(25), Cm(0.2), Cm(8), Cm(1))
+            tf2 = tb2.text_frame
+            p2 = tf2.paragraphs[0]
+            p2.text = right_text
+            p2.font.size = Pt(9)
+            p2.font.color.rgb = C_GRAY_TEXT
+            p2.alignment = PP_ALIGN.RIGHT
+
+    def _add_title(slide, text, y=Cm(2)):
+        tb = slide.shapes.add_textbox(Cm(1), y, Cm(32), Cm(1.8))
+        tf = tb.text_frame
         p = tf.paragraphs[0]
         p.text = text
-        p.font.size = Pt(20)
+        p.font.size = Pt(24)
         p.font.bold = True
-        p.font.color.rgb = C_WHITE
+        p.font.color.rgb = C_DARK
+        p.alignment = PP_ALIGN.CENTER
 
-    def set_cell(cell, text, size=9, bold=False, color=C_BLACK, bg=None, align=PP_ALIGN.LEFT):
+    def _set_cell(cell, text, size=10, bold=False, color=C_BLACK, align=PP_ALIGN.LEFT, v_align=MSO_ANCHOR.MIDDLE):
         cell.text = ""
         tf = cell.text_frame
         tf.word_wrap = True
-        for i, line in enumerate(str(text).split("\n")):
+        tf.auto_size = None
+        lines = str(text).split("\n")
+        for i, line in enumerate(lines):
             p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
             p.text = line
             p.font.size = Pt(size)
@@ -188,141 +229,205 @@ def create_storyboard_ppt(sb_data, topic, tone):
             p.alignment = align
             p.space_before = Pt(2)
             p.space_after = Pt(2)
-        if bg:
-            from pptx.oxml.ns import qn
-            tcPr = cell._tc.get_or_add_tcPr()
-            solidFill = tcPr.makeelement(qn('a:solidFill'), {})
-            srgbClr = solidFill.makeelement(qn('a:srgbClr'), {'val': bg})
-            solidFill.append(srgbClr)
-            tcPr.append(solidFill)
-        cell.vertical_anchor = MSO_ANCHOR.TOP
+        cell.vertical_anchor = v_align
 
-    # ── 슬라이드 1: 표지 ──
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    bg_rect = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Cm(0), Cm(0), SLIDE_W, SLIDE_H)
-    bg_rect.fill.solid()
-    bg_rect.fill.fore_color.rgb = C_DARK
-    bg_rect.line.fill.background()
-
-    bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Cm(14.5), Cm(5.5), Cm(5), Cm(0.3))
-    bar.fill.solid()
-    bar.fill.fore_color.rgb = C_ACCENT
-    bar.line.fill.background()
-
-    title = sb_data.get("title", topic)
-    txBox = slide.shapes.add_textbox(Cm(3), Cm(6.5), Cm(28), Cm(3))
-    tf = txBox.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(36)
-    p.font.bold = True
-    p.font.color.rgb = C_WHITE
-    p.alignment = PP_ALIGN.CENTER
-
-    txBox2 = slide.shapes.add_textbox(Cm(3), Cm(10), Cm(28), Cm(1.5))
-    tf2 = txBox2.text_frame
-    p2 = tf2.paragraphs[0]
-    p2.text = f"{sb_data.get('platform', '')}  |  {sb_data.get('total_duration', '')}  |  {sb_data.get('hosts', '')}  |  {tone}"
-    p2.font.size = Pt(14)
-    p2.font.color.rgb = RGBColor(0xAA, 0xAA, 0xBB)
-    p2.alignment = PP_ALIGN.CENTER
-
-    txBox3 = slide.shapes.add_textbox(Cm(3), Cm(14), Cm(28), Cm(1))
-    tf3 = txBox3.text_frame
-    p3 = tf3.paragraphs[0]
-    p3.text = f"LIVE COMMERCE STORYBOARD  |  {datetime.now().strftime('%Y.%m.%d')}"
-    p3.font.size = Pt(11)
-    p3.font.color.rgb = C_GRAY
-    p3.alignment = PP_ALIGN.CENTER
-
-    # ── 슬라이드 2: 전체 플로우 ──
+    brand = sb_data.get("title", topic)
+    platform = sb_data.get("platform", "")
+    hosts_name = sb_data.get("hosts", "")
+    duration = sb_data.get("total_duration", "")
     scenes = sb_data.get("scenes", [])
-    slide2 = prs.slides.add_slide(prs.slide_layouts[6])
-    add_header(slide2, "전체 플로우 — (실제 상황에 따라 상이할 수 있음)")
 
-    headers = ["구간", "섹션", "시간", "핵심 내용"]
-    rows_data = [headers]
-    for s in scenes:
-        rows_data.append([
-            str(s.get("scene_number", "")),
-            s.get("section", ""),
-            s.get("duration", ""),
-            s.get("product_info", s.get("narration", ""))[:40],
-        ])
+    # ══════════════════════════════════════
+    # 슬라이드 1: 표지
+    # ══════════════════════════════════════
+    s1 = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_slide_bg(s1)
+    _add_top_bar(s1, platform, "STORYBOARD")
 
-    tbl_shape = slide2.shapes.add_table(len(rows_data), 4, Cm(1.5), Cm(3), Cm(31), Cm(min(14, 1.2 * len(rows_data))))
-    table = tbl_shape.table
-    for i, w in enumerate([Cm(3), Cm(5), Cm(5), Cm(18)]):
-        table.columns[i].width = w
+    # 브랜드명 (큰 볼드)
+    tb = s1.shapes.add_textbox(Cm(2), Cm(4), Cm(30), Cm(4))
+    tf = tb.text_frame
+    p = tf.paragraphs[0]
+    p.text = brand
+    p.font.size = Pt(44)
+    p.font.bold = True
+    p.font.color.rgb = C_DARK
 
-    for r, row in enumerate(rows_data):
-        for c, val in enumerate(row):
-            cell = table.cell(r, c)
-            if r == 0:
-                set_cell(cell, val, size=10, bold=True, color=C_WHITE, bg='1A1A2E', align=PP_ALIGN.CENTER)
-            else:
-                bg_hex = 'F5F5F5' if r % 2 == 0 else None
-                set_cell(cell, val, size=9, align=PP_ALIGN.CENTER if c < 3 else PP_ALIGN.LEFT, bg=bg_hex)
+    # 부제
+    tb2 = s1.shapes.add_textbox(Cm(2), Cm(8), Cm(30), Cm(1.5))
+    tf2 = tb2.text_frame
+    p2 = tf2.paragraphs[0]
+    p2.text = f"{platform} 라이브커머스 스토리보드"
+    p2.font.size = Pt(16)
+    p2.font.color.rgb = C_TEAL
 
-    # ── 슬라이드 3~: 구간별 상세 ──
-    for s in scenes:
+    # 하단 정보 테이블
+    info_tbl = s1.shapes.add_table(4, 2, Cm(18), Cm(12), Cm(14), Cm(5.5))
+    info_t = info_tbl.table
+    info_t.columns[0].width = Cm(4)
+    info_t.columns[1].width = Cm(10)
+    info_data = [
+        ("일시", sb_data.get("broadcast_datetime", datetime.now().strftime("%Y년 %m월 %d일"))),
+        ("진행", hosts_name),
+        ("플랫폼", platform),
+        ("방송시간", duration),
+    ]
+    for r, (label, val) in enumerate(info_data):
+        c0 = info_t.cell(r, 0)
+        c1 = info_t.cell(r, 1)
+        _set_cell(c0, f"  {label}", size=10, bold=True, color=C_DARK)
+        _set_cell(c1, val, size=10, color=C_BLACK)
+        _set_cell_bg(c0, 'D0D0D0')
+        _set_cell_bg(c1, 'FFFFFF')
+
+    # ══════════════════════════════════════
+    # 슬라이드 2: 전체 플로우
+    # ══════════════════════════════════════
+    s2 = prs.slides.add_slide(prs.slide_layouts[6])
+    _set_slide_bg(s2)
+    _add_top_bar(s2, platform, "STORYBOARD")
+    _add_title(s2, "전체 플로우")
+
+    n_cols = len(scenes)
+    if n_cols > 0:
+        col_w = min(Cm(4), Cm(30) / n_cols)
+        total_w = col_w * n_cols
+        start_x = (SLIDE_W - total_w) / 2
+
+        flow_tbl = s2.shapes.add_table(2, n_cols, start_x, Cm(6), total_w, Cm(5))
+        ft = flow_tbl.table
+        for c in range(n_cols):
+            ft.columns[c].width = col_w
+
+        ft.rows[0].height = Cm(1.5)
+        ft.rows[1].height = Cm(3.5)
+
+        for c, sc in enumerate(scenes):
+            # 번호 셀
+            c0 = ft.cell(0, c)
+            _set_cell(c0, str(sc.get("scene_number", c+1)), size=14, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+            _set_cell_bg(c0, '3D9B8F')
+            # 구간명 셀
+            c1 = ft.cell(1, c)
+            section = sc.get("section", "")
+            if len(section) > 6:
+                section = section[:6] + "\n" + section[6:]
+            _set_cell(c1, section, size=10, bold=True, color=C_DARK, align=PP_ALIGN.CENTER)
+            _set_cell_bg(c1, 'FFFFFF' if c % 2 == 0 else 'F0F0F0')
+
+    # 컨셉
+    concept = sb_data.get("live_concept", "")
+    if concept:
+        tb_c = s2.shapes.add_textbox(Cm(2), Cm(13), Cm(30), Cm(1.5))
+        tf_c = tb_c.text_frame
+        p_c = tf_c.paragraphs[0]
+        p_c.text = f"컨셉: {concept}"
+        p_c.font.size = Pt(12)
+        p_c.font.color.rgb = C_GRAY_TEXT
+        p_c.font.bold = True
+
+    # ══════════════════════════════════════
+    # 슬라이드 3~: 구간별 상세 (4열: 구분/시간/상세/기타)
+    # ══════════════════════════════════════
+    for sc in scenes:
         sl = prs.slides.add_slide(prs.slide_layouts[6])
-        add_header(sl, f"방송 정보 — {s.get('section', '')}  ({s.get('duration', '')})")
+        _set_slide_bg(sl)
+        _add_top_bar(sl, platform, "STORYBOARD")
+        _add_title(sl, f"방송 정보 - {sc.get('section', '')}")
 
-        detail_rows = [
-            ["항목", "내용"],
-            ["쇼호스트 대본", s.get("host_script", s.get("narration", ""))],
-            ["화면 표시", s.get("screen_display", s.get("screen_description", ""))],
-            ["제품/혜택 정보", s.get("product_info", s.get("subtitle", ""))],
-            ["연출 지시", s.get("direction_note", s.get("camera_note", ""))],
-            ["시청자 유도", s.get("viewer_action", s.get("bgm_sfx", ""))],
+        # 대본 내용 조합
+        script = sc.get("host_script", "")
+        screen = sc.get("screen_display", "")
+        prod = sc.get("product_info", "")
+        direction = sc.get("direction_note", "")
+        viewer = sc.get("viewer_action", "")
+
+        detail = script
+        if prod and prod != script:
+            detail += f"\n\n[제품/혜택]\n{prod}"
+
+        etc_parts = []
+        if direction:
+            etc_parts.append(direction)
+        if viewer:
+            etc_parts.append(f"시청자 유도: {viewer}")
+        etc = "\n".join(etc_parts)
+
+        # 4열 테이블 (구분 / 시간 / 상세 / 기타) — 화면 꽉 차게
+        rows = [
+            ["구분", "시간", "상세", "기타"],
+            [sc.get("section", ""), sc.get("duration", ""), detail, etc],
         ]
 
-        tbl = sl.shapes.add_table(len(detail_rows), 2, Cm(1.5), Cm(3.5), Cm(31), Cm(13))
-        tbl_table = tbl.table
-        tbl_table.columns[0].width = Cm(7)
-        tbl_table.columns[1].width = Cm(24)
+        # 화면 표시 내용이 있으면 별도 행
+        if screen:
+            rows.append(["", "", f"[화면 표시]\n{screen}", ""])
 
-        for r, row in enumerate(detail_rows):
-            for c, val in enumerate(row):
-                cell = tbl_table.cell(r, c)
-                if r == 0:
-                    set_cell(cell, val, size=10, bold=True, color=C_WHITE, bg='1A1A2E', align=PP_ALIGN.CENTER)
-                elif c == 0:
-                    set_cell(cell, val, size=10, bold=True, color=RGBColor(0x1A, 0x1A, 0x2E), bg='E8EEF7', align=PP_ALIGN.LEFT)
+        tbl_h = Cm(13.5)
+        tbl = sl.shapes.add_table(len(rows), 4, Cm(0.8), Cm(4.5), Cm(32.3), tbl_h)
+        t = tbl.table
+        t.columns[0].width = Cm(4)
+        t.columns[1].width = Cm(3)
+        t.columns[2].width = Cm(19)
+        t.columns[3].width = Cm(6.3)
+
+        # 헤더 높이
+        t.rows[0].height = Cm(1.2)
+
+        for r_idx, row in enumerate(rows):
+            for c_idx, val in enumerate(row):
+                cell = t.cell(r_idx, c_idx)
+                if r_idx == 0:
+                    # 헤더
+                    _set_cell(cell, val, size=11, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+                    _set_cell_bg(cell, '888888')
+                elif c_idx == 0:
+                    # 구분 열 (티얼)
+                    _set_cell(cell, val, size=11, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+                    _set_cell_bg(cell, '3D9B8F')
+                elif c_idx == 1:
+                    _set_cell(cell, val, size=10, color=C_BLACK, align=PP_ALIGN.CENTER)
+                    _set_cell_bg(cell, 'FFFFFF')
                 else:
-                    set_cell(cell, val, size=10, bg='FFFFFF')
+                    _set_cell(cell, val, size=10, color=C_BLACK, align=PP_ALIGN.LEFT, v_align=MSO_ANCHOR.TOP)
+                    _set_cell_bg(cell, 'FFFFFF')
 
-    # ── 마지막 슬라이드: 라이브 컨셉 & 핵심 혜택 ──
+    # ══════════════════════════════════════
+    # 마지막: 라이브 컨셉 & 핵심 혜택
+    # ══════════════════════════════════════
     sl_last = prs.slides.add_slide(prs.slide_layouts[6])
-    add_header(sl_last, "라이브 컨셉 & 핵심 혜택")
+    _set_slide_bg(sl_last)
+    _add_top_bar(sl_last, platform, "STORYBOARD")
+    _add_title(sl_last, "라이브 컨셉 & 핵심 혜택")
 
-    concept = sb_data.get("live_concept", "")
     benefits = sb_data.get("key_benefits", [])
     benefits_text = "\n".join([f"  {i+1}. {b}" for i, b in enumerate(benefits)])
-    hosts_info = sb_data.get("hosts", "")
 
     info_rows = [
         ["항목", "내용"],
-        ["라이브 컨셉", concept],
+        ["라이브 컨셉", sb_data.get("live_concept", "")],
         ["핵심 혜택", benefits_text],
-        ["진행자", hosts_info],
+        ["진행자", hosts_name],
+        ["톤앤매너", tone],
     ]
 
-    tbl_last = sl_last.shapes.add_table(len(info_rows), 2, Cm(1.5), Cm(3.5), Cm(31), Cm(10))
-    tbl_last_table = tbl_last.table
-    tbl_last_table.columns[0].width = Cm(7)
-    tbl_last_table.columns[1].width = Cm(24)
+    tbl_last = sl_last.shapes.add_table(len(info_rows), 2, Cm(0.8), Cm(4.5), Cm(32.3), Cm(12))
+    tl = tbl_last.table
+    tl.columns[0].width = Cm(6)
+    tl.columns[1].width = Cm(26.3)
 
     for r, row in enumerate(info_rows):
         for c, val in enumerate(row):
-            cell = tbl_last_table.cell(r, c)
+            cell = tl.cell(r, c)
             if r == 0:
-                set_cell(cell, val, size=10, bold=True, color=C_WHITE, bg='1A1A2E', align=PP_ALIGN.CENTER)
+                _set_cell(cell, val, size=11, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+                _set_cell_bg(cell, '888888')
             elif c == 0:
-                set_cell(cell, val, size=10, bold=True, color=RGBColor(0x1A, 0x1A, 0x2E), bg='E8EEF7')
+                _set_cell(cell, val, size=11, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+                _set_cell_bg(cell, '3D9B8F')
             else:
-                set_cell(cell, val, size=10)
+                _set_cell(cell, val, size=11, color=C_BLACK)
+                _set_cell_bg(cell, 'FFFFFF')
 
     buf = io.BytesIO()
     prs.save(buf)
