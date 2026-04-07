@@ -35,7 +35,7 @@ def call_claude(prompt):
     """Claude API 호출"""
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=4096,
+        max_tokens=8192,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -93,11 +93,15 @@ def fetch_product_info(url):
     """상품 URL에서 정보를 가져온다"""
     try:
         headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+            "Accept-Encoding": "gzip, deflate",
+            "Connection": "keep-alive",
         }
-        resp = requests.get(url, headers=headers, timeout=15)
+        resp = requests.get(url, headers=headers, timeout=20, verify=False)
         resp.raise_for_status()
-        resp.encoding = resp.apparent_encoding
+        resp.encoding = resp.apparent_encoding or 'utf-8'
 
         soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer", "header", "iframe", "noscript"]):
@@ -332,619 +336,261 @@ def create_storyboard_ppt(sb_data, topic, tone):
 st.set_page_config(page_title="STUDIO", page_icon="🎬", layout="wide")
 
 # ─────────────────────────────────────────
-# 3D 모션 프리미엄 CSS
+# CSS
 # ─────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
 
-    /* ── 전역 ── */
     .stApp {
-        background: #08080f;
-        font-family: 'Noto Sans KR', 'Inter', sans-serif;
+        background: #0B0B12;
+        font-family: 'Noto Sans KR', sans-serif;
     }
     header[data-testid="stHeader"] { background: transparent !important; }
     h1, h2, h3, h4, p, span, label, div {
-        font-family: 'Noto Sans KR', 'Inter', sans-serif !important;
+        font-family: 'Noto Sans KR', sans-serif !important;
     }
 
-    /* ── 배경 그리드 ── */
-    .bg-grid {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        pointer-events: none;
-        z-index: 0;
-        background-image:
-            linear-gradient(rgba(138, 92, 246, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(138, 92, 246, 0.03) 1px, transparent 1px);
-        background-size: 60px 60px;
+    /* 헤더 */
+    .header-bar {
+        background: rgba(255,255,255,0.02);
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+        padding: 1.2rem 2rem;
+        margin: -1rem -1rem 2rem -1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
-
-    /* ── 글로우 오브 ── */
-    .glow-orb {
-        position: fixed;
-        border-radius: 50%;
-        filter: blur(80px);
-        pointer-events: none;
-        z-index: 0;
+    .header-title {
+        color: #fff;
+        font-size: 1.2rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
     }
-    .glow-orb-1 {
-        top: -10%; right: -5%;
-        width: 500px; height: 500px;
-        background: rgba(138, 92, 246, 0.08);
-        animation: orbMove1 20s ease-in-out infinite;
-    }
-    .glow-orb-2 {
-        bottom: -15%; left: -10%;
-        width: 600px; height: 600px;
-        background: rgba(59, 130, 246, 0.06);
-        animation: orbMove2 25s ease-in-out infinite;
-    }
-    .glow-orb-3 {
-        top: 40%; right: 20%;
-        width: 300px; height: 300px;
-        background: rgba(6, 182, 212, 0.05);
-        animation: orbMove3 18s ease-in-out infinite;
-    }
-    @keyframes orbMove1 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        33% { transform: translate(-50px, 30px) scale(1.1); }
-        66% { transform: translate(30px, -20px) scale(0.9); }
-    }
-    @keyframes orbMove2 {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        50% { transform: translate(40px, -40px) scale(1.15); }
-    }
-    @keyframes orbMove3 {
-        0%, 100% { transform: translate(0, 0); }
-        50% { transform: translate(-30px, 30px); }
-    }
-
-    /* ── 히어로 ── */
-    .hero-3d {
-        perspective: 1200px;
-        margin-bottom: 2.5rem;
-    }
-    .hero-inner {
-        background: linear-gradient(135deg,
-            rgba(138, 92, 246, 0.08) 0%,
-            rgba(59, 130, 246, 0.06) 50%,
-            rgba(6, 182, 212, 0.04) 100%);
-        border: 1px solid rgba(138, 92, 246, 0.15);
-        border-radius: 24px;
-        padding: 3rem 3.5rem;
-        position: relative;
-        overflow: hidden;
-        transform: rotateX(2deg);
-        transition: transform 0.8s cubic-bezier(0.23, 1, 0.32, 1);
-        box-shadow:
-            0 25px 80px rgba(138, 92, 246, 0.1),
-            0 0 0 1px rgba(255, 255, 255, 0.03) inset;
-        animation: heroFloat 8s ease-in-out infinite;
-        backdrop-filter: blur(40px);
-        -webkit-backdrop-filter: blur(40px);
-    }
-    .hero-inner:hover {
-        transform: rotateX(0deg) translateY(-3px);
-    }
-    @keyframes heroFloat {
-        0%, 100% { transform: rotateX(2deg) translateY(0); }
-        50% { transform: rotateX(0.5deg) translateY(-6px); }
-    }
-    .hero-inner::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(138, 92, 246, 0.3), rgba(59, 130, 246, 0.3), transparent);
-    }
-    .hero-inner::after {
-        content: '';
-        position: absolute;
-        top: -50%; right: -20%;
-        width: 400px; height: 400px;
-        background: radial-gradient(circle, rgba(138, 92, 246, 0.1) 0%, transparent 70%);
-        animation: pulseGlow 6s ease-in-out infinite;
-    }
-    @keyframes pulseGlow {
-        0%, 100% { opacity: 0.3; transform: scale(1); }
-        50% { opacity: 0.8; transform: scale(1.3); }
-    }
-    .hero-label {
+    .header-accent {
         color: #8B5CF6;
-        font-size: 0.75rem;
+    }
+    .header-nav {
+        display: flex;
+        gap: 24px;
+    }
+    .header-nav-item {
+        color: #555;
+        font-size: 0.8rem;
+        font-weight: 500;
+        padding: 6px 14px;
+        border-radius: 8px;
+        transition: all 0.3s;
+    }
+    .header-nav-active {
+        color: #c0c0e0;
+        background: rgba(138,92,246,0.1);
+    }
+
+    /* 섹션 */
+    .section-label {
+        color: #8B5CF6;
+        font-size: 0.7rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 3px;
+        letter-spacing: 2px;
         margin-bottom: 0.8rem;
-        position: relative;
-        z-index: 1;
-    }
-    .hero-title {
-        color: #FFFFFF;
-        font-size: 2.5rem;
-        font-weight: 900;
-        letter-spacing: -1px;
-        margin: 0;
-        position: relative;
-        z-index: 1;
-        line-height: 1.2;
-    }
-    .hero-gradient {
-        background: linear-gradient(135deg, #8B5CF6, #3B82F6, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        background-size: 200% 200%;
-        animation: gradientFlow 5s ease infinite;
-    }
-    @keyframes gradientFlow {
-        0%, 100% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-    }
-    .hero-sub {
-        color: #7777aa;
-        font-size: 1rem;
-        margin-top: 0.8rem;
-        font-weight: 300;
-        position: relative;
-        z-index: 1;
     }
 
-    /* ── 네비게이션 카드 (사이드바 대용) ── */
-    .nav-card {
-        background: rgba(255, 255, 255, 0.02);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 16px;
-        padding: 1.2rem 1.5rem;
-        margin-bottom: 0.8rem;
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        cursor: pointer;
-        transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-        position: relative;
-        overflow: hidden;
-    }
-    .nav-card:hover {
-        border-color: rgba(138, 92, 246, 0.3);
-        transform: translateX(6px);
-        box-shadow: 0 8px 30px rgba(138, 92, 246, 0.1);
-    }
-    .nav-card.active {
-        border-color: rgba(138, 92, 246, 0.4);
-        background: rgba(138, 92, 246, 0.06);
-        box-shadow: 0 0 25px rgba(138, 92, 246, 0.08);
-    }
-    .nav-icon {
-        width: 42px; height: 42px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-        flex-shrink: 0;
-    }
-    .nav-icon-purple { background: linear-gradient(135deg, rgba(138, 92, 246, 0.2), rgba(138, 92, 246, 0.05)); }
-    .nav-icon-blue { background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05)); }
-    .nav-icon-cyan { background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(6, 182, 212, 0.05)); }
-    .nav-title {
-        color: #d0d0e0;
-        font-size: 0.95rem;
-        font-weight: 600;
-    }
-    .nav-desc {
-        color: #666688;
-        font-size: 0.75rem;
-        font-weight: 300;
-    }
-    .nav-badge {
-        margin-left: auto;
-        font-size: 0.65rem;
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-weight: 600;
-    }
-    .badge-active {
-        background: rgba(138, 92, 246, 0.15);
-        color: #8B5CF6;
-    }
-    .badge-soon {
-        background: rgba(255, 255, 255, 0.05);
-        color: #555577;
-    }
-
-    /* ── 글래스 카드 ── */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.02);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 20px;
-        padding: 2rem;
-        margin-bottom: 1.2rem;
-        transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
-        position: relative;
-        overflow: hidden;
-    }
-    .glass-card::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
-    }
-    .glass-card:hover {
-        border-color: rgba(138, 92, 246, 0.2);
-        transform: translateY(-2px);
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
-    }
-
-    /* ── 스텝 인디케이터 ── */
-    .step-indicator {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 1.5rem;
-    }
-    .step-dot {
-        width: 32px; height: 32px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        font-size: 0.85rem;
-        color: white;
-        background: linear-gradient(135deg, #8B5CF6, #6D28D9);
-        box-shadow: 0 4px 15px rgba(138, 92, 246, 0.3);
-    }
-    .step-text {
-        color: #d0d0e0;
-        font-size: 1.05rem;
-        font-weight: 700;
-    }
-
-    /* ── 입력 필드 ── */
+    /* 입력 */
     .stTextInput input, .stTextArea textarea {
-        background: rgba(255, 255, 255, 0.03) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 14px !important;
+        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px !important;
         color: #e0e0f0 !important;
-        transition: all 0.4s ease !important;
+        transition: border-color 0.3s !important;
     }
     .stTextInput input:focus, .stTextArea textarea:focus {
         border-color: #8B5CF6 !important;
-        box-shadow: 0 0 0 2px rgba(138, 92, 246, 0.15), 0 0 30px rgba(138, 92, 246, 0.08) !important;
+        box-shadow: 0 0 0 1px rgba(138,92,246,0.2) !important;
     }
-
     [data-testid="stSelectbox"] > div > div {
-        background: rgba(255, 255, 255, 0.03) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 14px !important;
+        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px !important;
         color: #e0e0f0 !important;
     }
-
-    label, .stTextInput label, .stSelectbox label,
-    [data-testid="stWidgetLabel"] p,
-    .stMarkdown p, .stMarkdown li {
-        color: #9999bb !important;
+    [data-testid="stDateInput"] > div > div {
+        background: rgba(255,255,255,0.04) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        border-radius: 10px !important;
     }
+    [data-testid="stDateInput"] input { color: #e0e0f0 !important; }
+    label, .stTextInput label, .stSelectbox label,
+    [data-testid="stWidgetLabel"] p {
+        color: #8888aa !important;
+        font-size: 0.85rem !important;
+    }
+    .stMarkdown p, .stMarkdown li { color: #b0b0cc !important; }
 
-    /* ── 버튼 3D ── */
+    /* 버튼 */
     .stButton > button {
-        background: linear-gradient(135deg, #8B5CF6, #6D28D9) !important;
+        background: #8B5CF6 !important;
         color: white !important;
         border: none !important;
-        padding: 0.85rem 2.5rem !important;
-        font-size: 1rem !important;
+        padding: 0.75rem 2rem !important;
+        font-size: 0.95rem !important;
         font-weight: 700 !important;
-        border-radius: 14px !important;
-        transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1) !important;
-        box-shadow:
-            0 6px 20px rgba(138, 92, 246, 0.25),
-            0 0 40px rgba(138, 92, 246, 0.08);
-        transform: perspective(600px) rotateX(0deg);
-        position: relative;
-        overflow: hidden;
-    }
-    .stButton > button::before {
-        content: '';
-        position: absolute;
-        top: 0; left: -100%;
-        width: 100%; height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-        transition: left 0.6s;
-    }
-    .stButton > button:hover::before {
-        left: 100%;
+        border-radius: 10px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 12px rgba(138,92,246,0.2);
     }
     .stButton > button:hover {
-        background: linear-gradient(135deg, #A78BFA, #7C3AED) !important;
-        transform: perspective(600px) rotateX(-4deg) translateY(-4px) !important;
-        box-shadow:
-            0 15px 40px rgba(138, 92, 246, 0.35),
-            0 0 60px rgba(138, 92, 246, 0.12) !important;
+        background: #7C3AED !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 20px rgba(138,92,246,0.3) !important;
     }
-    .stButton > button:active {
-        transform: perspective(600px) rotateX(2deg) translateY(0) !important;
-        box-shadow: 0 4px 15px rgba(138, 92, 246, 0.2) !important;
-    }
-
-    /* 다운로드 버튼 */
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #06B6D4, #0891B2) !important;
+        background: #06B6D4 !important;
         color: white !important;
         border: none !important;
-        padding: 0.85rem 2.5rem !important;
-        font-size: 1rem !important;
+        padding: 0.75rem 2rem !important;
+        font-size: 0.95rem !important;
         font-weight: 700 !important;
-        border-radius: 14px !important;
-        box-shadow: 0 6px 20px rgba(6, 182, 212, 0.25);
-        transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1) !important;
-    }
-    .stDownloadButton > button:hover {
-        transform: perspective(600px) rotateX(-4deg) translateY(-4px) !important;
-        box-shadow: 0 15px 40px rgba(6, 182, 212, 0.35) !important;
-    }
-
-    /* ── 파일 업로더 ── */
-    [data-testid="stFileUploader"] {
-        background: rgba(138, 92, 246, 0.03);
-        border: 2px dashed rgba(138, 92, 246, 0.15);
-        border-radius: 16px;
-        padding: 1.8rem;
-        transition: all 0.5s ease;
-    }
-    [data-testid="stFileUploader"]:hover {
-        border-color: rgba(138, 92, 246, 0.4);
-        background: rgba(138, 92, 246, 0.06);
-        box-shadow: 0 0 40px rgba(138, 92, 246, 0.06);
-    }
-
-    /* ── Expander ── */
-    .streamlit-expanderHeader {
-        background: rgba(255, 255, 255, 0.03) !important;
-        border-radius: 14px !important;
-        color: #d0d0e0 !important;
-        font-weight: 600 !important;
-        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 12px rgba(6,182,212,0.2);
         transition: all 0.3s ease !important;
     }
-    .streamlit-expanderHeader:hover {
-        background: rgba(138, 92, 246, 0.06) !important;
-        border-color: rgba(138, 92, 246, 0.15) !important;
-        transform: translateX(4px);
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 20px rgba(6,182,212,0.3) !important;
+    }
+
+    /* 업로더 */
+    [data-testid="stFileUploader"] {
+        background: rgba(255,255,255,0.02);
+        border: 1px dashed rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 1.2rem;
+    }
+    [data-testid="stFileUploader"]:hover {
+        border-color: rgba(138,92,246,0.3);
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: rgba(255,255,255,0.03) !important;
+        border-radius: 10px !important;
+        color: #b0b0cc !important;
+        font-weight: 500 !important;
     }
     .streamlit-expanderContent {
-        background: rgba(255, 255, 255, 0.015) !important;
-        border: 1px solid rgba(255, 255, 255, 0.03) !important;
-        border-radius: 0 0 14px 14px !important;
+        background: rgba(255,255,255,0.015) !important;
+        border-radius: 0 0 10px 10px !important;
     }
 
-    /* ── 알림 ── */
-    .stAlert {
-        border-radius: 14px !important;
-        animation: fadeSlideIn 0.6s cubic-bezier(0.23, 1, 0.32, 1);
-    }
-    @keyframes fadeSlideIn {
-        from { opacity: 0; transform: translateY(15px) scale(0.98); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
-    }
+    /* 알림 */
+    .stAlert { border-radius: 10px !important; }
 
-    /* ── 구분선 ── */
-    hr { border-color: rgba(255, 255, 255, 0.04) !important; }
+    /* 구분선 */
+    hr { border-color: rgba(255,255,255,0.05) !important; }
 
-    /* ── 스크롤바 ── */
-    ::-webkit-scrollbar { width: 5px; }
+    /* 스크롤바 */
+    ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, #8B5CF6, #3B82F6);
-        border-radius: 3px;
-    }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 
-    /* ── 푸터 ── */
     .footer-3d {
         text-align: center;
-        padding: 3rem 0 2rem;
-        color: #333355;
-        font-size: 0.75rem;
+        padding: 2rem 0;
+        color: #333;
+        font-size: 0.7rem;
         letter-spacing: 2px;
-        text-transform: uppercase;
     }
 </style>
-
-<!-- 배경 효과 -->
-<div class="bg-grid"></div>
-<div class="glow-orb glow-orb-1"></div>
-<div class="glow-orb glow-orb-2"></div>
-<div class="glow-orb glow-orb-3"></div>
 """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────
-# 히어로 헤더
-# ─────────────────────────────────────────
+# ─── 헤더 ───
 st.markdown("""
-<div class="hero-3d">
-    <div class="hero-inner">
-        <p class="hero-label">LIVE COMMERCE AUTOMATION</p>
-        <p class="hero-title">
-            <span class="hero-gradient">STUDIO</span>
-        </p>
-        <p class="hero-sub">
-            제품 소개서를 업로드하면 AI가 라이브커머스 스토리보드 PPT를 자동으로 생성합니다.
-        </p>
+<div class="header-bar">
+    <div class="header-title"><span class="header-accent">LIVE</span> STUDIO</div>
+    <div class="header-nav">
+        <span class="header-nav-item header-nav-active">스토리보드</span>
+        <span class="header-nav-item">배너 생성</span>
+        <span class="header-nav-item">분석</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-
 # ─────────────────────────────────────────
-# 메뉴 네비게이션
+# 입력 폼
 # ─────────────────────────────────────────
-st.markdown("""
-<div style="display: flex; gap: 12px; margin-bottom: 2rem;">
-    <div class="nav-card active" style="flex:1;">
-        <div class="nav-icon nav-icon-purple">🎬</div>
-        <div>
-            <div class="nav-title">스토리보드 PPT</div>
-            <div class="nav-desc">제품 소개서 → AI 스토리보드</div>
-        </div>
-        <span class="nav-badge badge-active">ACTIVE</span>
-    </div>
-    <div class="nav-card" style="flex:1; opacity: 0.5;">
-        <div class="nav-icon nav-icon-blue">🎨</div>
-        <div>
-            <div class="nav-title">배너 자동 생성</div>
-            <div class="nav-desc">Figma 연동 배너 제작</div>
-        </div>
-        <span class="nav-badge badge-soon">SOON</span>
-    </div>
-    <div class="nav-card" style="flex:1; opacity: 0.5;">
-        <div class="nav-icon nav-icon-cyan">📊</div>
-        <div>
-            <div class="nav-title">콘텐츠 분석</div>
-            <div class="nav-desc">성과 분석 & 리포트</div>
-        </div>
-        <span class="nav-badge badge-soon">SOON</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
 
+# 기본 정보
+st.markdown('<div class="section-label">기본 정보</div>', unsafe_allow_html=True)
 
-# ─────────────────────────────────────────
-# 스토리보드 생성 메인
-# ─────────────────────────────────────────
-col_left, col_gap, col_right = st.columns([5, 0.3, 5])
-
-with col_left:
-    # STEP 1: 기본 정보
-    st.markdown("""
-    <div class="step-indicator">
-        <div class="step-dot">1</div>
-        <div class="step-text">기본 정보</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    topic = st.text_input("라이브 주제 / 브랜드명", placeholder="예: 닥터지 신제품 런칭, 봄 시즌 뷰티 프로모션")
-
+col1, col2 = st.columns([3, 1])
+with col1:
+    topic = st.text_input("라이브 주제 / 브랜드명", placeholder="예: 닥터지 신제품 런칭")
+with col2:
     style = st.selectbox("톤앤매너", ["밝고 친근한", "전문적이고 신뢰감 있는", "활기차고 에너지 넘치는", "고급스럽고 세련된"])
 
-    st.markdown("<br>", unsafe_allow_html=True)
+st.markdown("---")
 
-    # STEP 2: 방송 정보
-    st.markdown("""
-    <div class="step-indicator">
-        <div class="step-dot">2</div>
-        <div class="step-text">방송 정보</div>
-    </div>
-    """, unsafe_allow_html=True)
+# 방송 정보
+st.markdown('<div class="section-label">방송 정보</div>', unsafe_allow_html=True)
 
+col_a, col_b, col_c = st.columns(3)
+with col_a:
     broadcast_platform = st.selectbox(
-        "방송 플랫폼",
+        "플랫폼",
         ["카카오쇼핑라이브", "네이버 쇼핑라이브", "쿠팡 라이브", "SSG 라이브", "11번가 라이브", "기타"],
         key="bc_platform",
     )
     if broadcast_platform == "기타":
-        broadcast_platform = st.text_input("플랫폼명 직접 입력", key="bc_plat_custom")
-
+        broadcast_platform = st.text_input("플랫폼명", key="bc_plat_custom")
+with col_b:
     hosts = st.text_input("쇼호스트", placeholder="예: 이소유 & 조을희", key="bc_hosts")
+with col_c:
+    broadcast_duration = st.selectbox("방송 시간", ["30분", "60분", "90분", "120분"], index=1, key="bc_duration")
 
-    col_e, col_f = st.columns(2)
-    with col_e:
-        broadcast_date = st.date_input("방송 날짜", key="bc_date")
-    with col_f:
-        broadcast_time = st.text_input("방송 시간", placeholder="예: 20:30~21:30", key="bc_time")
+col_d, col_e, col_f = st.columns(3)
+with col_d:
+    broadcast_date = st.date_input("방송 날짜", key="bc_date")
+with col_e:
+    broadcast_time = st.text_input("방송 시간대", placeholder="예: 20:30~21:30", key="bc_time")
+with col_f:
+    broadcast_location = st.text_input("방송 장소", placeholder="예: 강남구 역삼로 216", key="bc_location")
 
-    broadcast_location = st.text_input("방송 장소", placeholder="예: 서울 강남구 역삼로 216 B2", key="bc_location")
-    broadcast_duration = st.selectbox("방송 시간(분)", ["30분", "60분", "90분", "120분"], index=1, key="bc_duration")
+if broadcast_date:
+    date_str = broadcast_date.strftime("%Y년 %m월 %d일")
+    datetime_str = f"{date_str} {broadcast_time}" if broadcast_time else date_str
+else:
+    datetime_str = ""
 
-    if broadcast_date:
-        date_str = broadcast_date.strftime("%Y년 %m월 %d일")
-        datetime_str = f"{date_str} {broadcast_time}" if broadcast_time else date_str
-    else:
-        datetime_str = ""
+st.markdown("---")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+# 제품 소개서
+st.markdown('<div class="section-label">제품 소개서</div>', unsafe_allow_html=True)
 
-    # STEP 3: 제품 소개서
-    st.markdown("""
-    <div class="step-indicator">
-        <div class="step-dot">3</div>
-        <div class="step-text">제품 소개서 업로드</div>
-    </div>
-    """, unsafe_allow_html=True)
-
+col_g, col_h = st.columns([1, 1])
+with col_g:
     uploaded_excel = st.file_uploader(
-        "엑셀 파일 (.xlsx)을 업로드하면 상품 정보 + URL을 자동으로 읽어옵니다",
+        "엑셀 (.xlsx) 업로드 — 상품 정보 + URL 자동 추출",
         type=["xlsx"],
     )
-
-    with st.expander("URL 직접 입력 (엑셀 없이 사용할 때)"):
-        manual_urls = st.text_area(
-            "상품 URL을 한 줄에 하나씩 입력",
-            placeholder="https://smartstore.naver.com/...\nhttps://www.coupang.com/...",
-            height=100,
+with col_h:
+    with st.expander("URL 직접 입력"):
+        st.text_area(
+            "한 줄에 하나씩",
+            placeholder="https://smartstore.naver.com/...",
+            height=80,
             key="sb_urls_manual",
         )
 
+st.markdown("---")
 
-with col_right:
-    # STEP 4: 생성
-    st.markdown("""
-    <div class="step-indicator">
-        <div class="step-dot">4</div>
-        <div class="step-text">스토리보드 생성</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # 입력 미리보기
-    if topic:
-        st.markdown(f"""
-        <div class="glass-card">
-            <div style="color: #8B5CF6; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1rem;">입력 정보 확인</div>
-            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-                <span style="color: #666688; font-size: 0.85rem;">주제</span>
-                <span style="color: #d0d0e0; font-size: 0.85rem; font-weight: 500;">{topic}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-                <span style="color: #666688; font-size: 0.85rem;">톤앤매너</span>
-                <span style="color: #d0d0e0; font-size: 0.85rem;">{style}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-                <span style="color: #666688; font-size: 0.85rem;">방송 플랫폼</span>
-                <span style="color: #d0d0e0; font-size: 0.85rem;">{broadcast_platform}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-                <span style="color: #666688; font-size: 0.85rem;">쇼호스트</span>
-                <span style="color: #d0d0e0; font-size: 0.85rem;">{hosts or '(미입력)'}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-                <span style="color: #666688; font-size: 0.85rem;">방송 일시</span>
-                <span style="color: #d0d0e0; font-size: 0.85rem;">{datetime_str or '(미입력)'}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);">
-                <span style="color: #666688; font-size: 0.85rem;">방송 장소</span>
-                <span style="color: #d0d0e0; font-size: 0.85rem;">{broadcast_location or '(미입력)'}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; padding: 6px 0;">
-                <span style="color: #666688; font-size: 0.85rem;">소개서</span>
-                <span style="color: #d0d0e0; font-size: 0.85rem;">{'업로드 완료' if uploaded_excel else '없음'}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    generate_btn = st.button(
-        "스토리보드 생성하기",
-        use_container_width=True,
-        disabled=not topic,
-    )
-
-    if not topic:
-        st.caption("콘텐츠 주제를 먼저 입력해주세요.")
+# 생성 버튼
+generate_btn = st.button(
+    "스토리보드 생성하기",
+    use_container_width=True,
+    disabled=not topic,
+)
 
 
 # ─────────────────────────────────────────
@@ -965,24 +611,28 @@ if generate_btn and topic:
             st.success(f"제품 소개서 분석 완료! (URL {len(urls_to_fetch)}개 발견)")
 
     # 2) 직접 입력 URL
+    manual_urls = st.session_state.get("sb_urls_manual", "")
     if manual_urls.strip():
         extra = [u.strip() for u in manual_urls.strip().split("\n") if u.strip()]
         for u in extra:
             if u not in urls_to_fetch:
                 urls_to_fetch.append(u)
 
-    # 3) URL에서 상품 정보 수집
+    # 3) URL에서 상품 정보 수집 (실패해도 계속 진행)
     all_fetched = []
+    failed_count = 0
     if urls_to_fetch:
         with st.spinner(f"상품 페이지 {len(urls_to_fetch)}개에서 정보 수집 중..."):
             for i, url in enumerate(urls_to_fetch):
                 info = fetch_product_info(url)
                 if "가져오지 못했습니다" in info:
-                    st.warning(f"URL {i+1} 실패: {url}")
+                    failed_count += 1
                 else:
                     all_fetched.append(f"[상품 {i+1}] {url}\n{info}")
         if all_fetched:
             st.success(f"상품 정보 {len(all_fetched)}개 수집 완료!")
+        if failed_count > 0:
+            st.info(f"URL {failed_count}개는 접근이 차단된 사이트입니다. 소개서 내용만으로 진행합니다.")
 
     # 4) 상품 정보 조합
     parts = []
@@ -1005,64 +655,94 @@ if generate_btn and topic:
 {product_info}
 """
 
-        sb_prompt = f"""다음 정보를 기반으로 라이브커머스 방송 스토리보드를 만들어줘.
+        sb_prompt = f"""라이브커머스 방송 스토리보드를 JSON으로 작성해.
 
+[입력 정보]
 주제/브랜드: {topic}
 톤앤매너: {style}
-
-방송 정보:
-- 플랫폼: {broadcast_platform}
-- 쇼호스트: {hosts or '(미정)'}
-- 방송 일시: {datetime_str or '(미정)'}
-- 방송 장소: {broadcast_location or '(미정)'}
-- 방송 시간: {broadcast_duration}
+플랫폼: {broadcast_platform}
+쇼호스트: {hosts or '(미정)'}
+방송 일시: {datetime_str or '(미정)'}
+방송 장소: {broadcast_location or '(미정)'}
+방송 시간: {broadcast_duration}
 {product_context}
-반드시 아래 JSON 형식으로만 응답해줘 (다른 텍스트 없이 JSON만):
 
+[규칙]
+- 오프닝 → 브랜드소개 → 제품별소개 → 혜택/가격 → Q&A → 클로징 순서
+- 방송 시간({broadcast_duration})에 맞게 장면 수 조절
+- 쇼호스트 대본은 대화체로 자연스럽게
+- 반드시 JSON만 출력. 설명 텍스트 금지.
+
+```json
 {{
-  "title": "라이브 방송 제목",
+  "title": "방송 제목",
   "platform": "{broadcast_platform}",
   "total_duration": "{broadcast_duration}",
   "hosts": "{hosts or '(미정)'}",
   "scenes": [
     {{
       "scene_number": 1,
-      "duration": "0~2분",
-      "section": "오프닝",
-      "host_script": "쇼호스트 대본 (대화체, 자연스럽게)",
-      "screen_display": "화면에 표시할 내용 (배너, 가격표, 자막 등)",
-      "product_info": "이 구간에서 소개할 제품/혜택 정보",
-      "direction_note": "연출 지시 (카메라, 제품 클로즈업, 시연 등)",
-      "viewer_action": "시청자 유도 액션 (댓글, 좋아요, 구매 등)"
+      "duration": "시간범위",
+      "section": "구간명",
+      "host_script": "쇼호스트 대본",
+      "screen_display": "화면 표시 내용",
+      "product_info": "제품/혜택 정보",
+      "direction_note": "연출 지시",
+      "viewer_action": "시청자 유도"
     }}
   ],
-  "live_concept": "라이브 컨셉 한 줄 요약",
-  "key_benefits": ["핵심 혜택1", "핵심 혜택2", "핵심 혜택3"]
+  "live_concept": "컨셉 한줄",
+  "key_benefits": ["혜택1", "혜택2", "혜택3"]
 }}
-
-라이브커머스 방송 플로우에 맞게 구성해줘:
-1. 오프닝 (인사, 방송 소개)
-2. 브랜드/제품 소개
-3. 제품별 상세 소개 (각 제품마다 별도 장면)
-4. 혜택/가격 소개
-5. Q&A / 시청자 소통
-6. 클로징 (이벤트, 마무리)
-
-방송 시간({broadcast_duration})에 맞게 장면 수와 시간 배분을 조절해줘.
-쇼호스트 대본은 실제 방송에서 바로 쓸 수 있도록 대화체로 자연스럽게 작성해줘."""
+```"""
 
         sb_result = call_claude(sb_prompt)
 
-        try:
-            json_match = re.search(r'\{[\s\S]*\}', sb_result)
-            if json_match:
-                sb_data = json.loads(json_match.group())
-            else:
-                st.error("스토리보드 생성에 실패했습니다. 다시 시도해주세요.")
-                st.stop()
-        except json.JSONDecodeError:
-            st.error("스토리보드 데이터 파싱에 실패했습니다. 다시 시도해주세요.")
-            st.code(sb_result)
+        # JSON 파싱 (여러 방법으로 시도)
+        sb_data = None
+        # 방법 1: ```json ... ``` 블록 찾기
+        code_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', sb_result)
+        if code_match:
+            try:
+                sb_data = json.loads(code_match.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+        # 방법 2: 전체에서 { } 찾기
+        if sb_data is None:
+            try:
+                # 가장 바깥쪽 { } 찾기
+                start = sb_result.index('{')
+                depth = 0
+                end = start
+                for i in range(start, len(sb_result)):
+                    if sb_result[i] == '{':
+                        depth += 1
+                    elif sb_result[i] == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end = i + 1
+                            break
+                sb_data = json.loads(sb_result[start:end])
+            except (ValueError, json.JSONDecodeError):
+                pass
+
+        # 방법 3: 실패 시 AI에게 다시 요청
+        if sb_data is None:
+            with st.spinner("스토리보드를 다시 생성하고 있습니다..."):
+                retry_prompt = f"아래 내용을 올바른 JSON 형식으로만 변환해줘. 다른 텍스트 없이 JSON만 출력해줘:\n\n{sb_result[:3000]}"
+                retry_result = call_claude(retry_prompt)
+                try:
+                    retry_match = re.search(r'\{[\s\S]*\}', retry_result)
+                    if retry_match:
+                        sb_data = json.loads(retry_match.group())
+                except (ValueError, json.JSONDecodeError):
+                    pass
+
+        if sb_data is None:
+            st.error("스토리보드 생성에 실패했습니다. 다시 시도해주세요.")
+            with st.expander("AI 응답 원문 (디버깅용)"):
+                st.code(sb_result)
             st.stop()
 
     # 6) 미리보기
