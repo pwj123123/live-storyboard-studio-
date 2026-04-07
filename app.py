@@ -35,7 +35,7 @@ def call_claude(prompt):
     """Claude API 호출"""
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=8192,
+        max_tokens=16000,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -309,15 +309,15 @@ def create_storyboard_ppt(sb_data, topic, tone):
 
         sec_name = sc.get("section", "")
 
-        # 2행 4열 테이블 (메리쏘드와 동일 위치/크기)
-        tbl = sl.shapes.add_table(2, 4, Emu(237900), Emu(665375), Emu(8668200), Emu(4200000))
+        # 2행 4열 테이블 — 슬라이드 꽉 차게
+        tbl = sl.shapes.add_table(2, 4, Emu(237900), Emu(665375), Emu(8668200), Emu(4300000))
         t = tbl.table
         t.columns[0].width = Emu(643600)
         t.columns[1].width = Emu(629075)
         t.columns[2].width = Emu(5228475)
         t.columns[3].width = Emu(2167050)
-        t.rows[0].height = Emu(380000)
-        t.rows[1].height = Emu(3820000)
+        t.rows[0].height = Emu(350000)
+        t.rows[1].height = Emu(3950000)
 
         for c, h in enumerate(["구분", "시간", "상세", "기타"]):
             _fc(t.cell(0, c), h, sz=9, b=True, clr=C_WHITE, al=PP_ALIGN.CENTER)
@@ -327,9 +327,14 @@ def create_storyboard_ppt(sb_data, topic, tone):
         _cbg(t.cell(1, 0), '2D2D3F')
         _fc(t.cell(1, 1), sc.get("duration", ""), sz=9, clr=C_BLACK, al=PP_ALIGN.CENTER)
         _cbg(t.cell(1, 1), 'FFFFFF')
-        _fc(t.cell(1, 2), detail, sz=8, clr=C_BLACK)
+
+        # 상세 열: 내용 길이에 따라 글자 크기 조절
+        detail_sz = 9 if len(detail) < 400 else 8 if len(detail) < 700 else 7
+        _fc(t.cell(1, 2), detail, sz=detail_sz, clr=C_BLACK)
         _cbg(t.cell(1, 2), 'FFFFFF')
-        _fc(t.cell(1, 3), etc, sz=8, clr=C_GRAY)
+
+        etc_sz = 9 if len(etc) < 200 else 8 if len(etc) < 400 else 7
+        _fc(t.cell(1, 3), etc, sz=etc_sz, clr=C_GRAY)
         _cbg(t.cell(1, 3), 'FFFFFF')
 
     # ── 마지막: 컨셉 & 혜택 ──
@@ -707,9 +712,20 @@ if generate_btn and topic:
 {product_context}
 
 [규칙]
-- 오프닝 → 브랜드소개 → 제품별소개 → 혜택/가격 → Q&A → 클로징 순서
-- 방송 시간({broadcast_duration})에 맞게 장면 수 조절
-- 쇼호스트 대본은 대화체로 자연스럽게
+- 아래 순서대로 구성하되, 각 구간을 별도 scene으로 만들어:
+  1. 오프닝 (인사, 오늘 방송 소개, 시청자 맞이)
+  2. 브랜드 소개 (브랜드 히스토리, 수상 이력, 신뢰도)
+  3. 라이브 혜택 소개 (쿠폰, 사은품, 이벤트 등 상세하게)
+  4. 가격 소개 (제품별 정상가/할인가/쿠폰적용가)
+  5. 사은품 소구 포인트 (사은품 제품 설명)
+  6. 제품별 상세 소개 (제품마다 별도 scene — 소구포인트, 색상, 추천 대상, 시연 방법)
+  7. 이벤트 당첨자 발표 & 클로징
+
+- 60분 방송이면 최소 8~12개 scene, 90분이면 12~15개 scene
+- host_script는 실제 방송에서 바로 읽을 수 있는 대화체, 최소 300자 이상
+- product_info는 제품 특징, 성분, 가격, 색상 등 구체적으로
+- screen_display는 화면에 표시할 배너/자막/가격표 내용
+- direction_note는 카메라 앵글, 시연 방법, 클로즈업 등
 - 반드시 JSON만 출력. 설명 텍스트 금지.
 
 ```json
@@ -718,16 +734,18 @@ if generate_btn and topic:
   "platform": "{broadcast_platform}",
   "total_duration": "{broadcast_duration}",
   "hosts": "{hosts or '(미정)'}",
+  "broadcast_datetime": "{datetime_str or '(미정)'}",
+  "broadcast_location": "{broadcast_location or '(미정)'}",
   "scenes": [
     {{
       "scene_number": 1,
       "duration": "시간범위",
       "section": "구간명",
-      "host_script": "쇼호스트 대본",
-      "screen_display": "화면 표시 내용",
-      "product_info": "제품/혜택 정보",
-      "direction_note": "연출 지시",
-      "viewer_action": "시청자 유도"
+      "host_script": "쇼호스트 대본 (최소 300자, 대화체)",
+      "screen_display": "화면에 표시할 배너/자막/가격표",
+      "product_info": "제품/혜택 상세 정보",
+      "direction_note": "연출 지시 (카메라, 시연, 소품)",
+      "viewer_action": "시청자 유도 액션"
     }}
   ],
   "live_concept": "컨셉 한줄",
