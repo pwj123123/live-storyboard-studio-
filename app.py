@@ -448,7 +448,7 @@ st.markdown("""
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
 
     .stApp {
-        background: #0B0B12;
+        background: #F5F5F5;
         font-family: 'Noto Sans KR', sans-serif;
     }
     header[data-testid="stHeader"] { background: transparent !important; }
@@ -458,7 +458,7 @@ st.markdown("""
 
     /* 헤더 */
     .header-bar {
-        background: rgba(255,255,255,0.02);
+        background: #FFFFFF;
         border-bottom: 1px solid rgba(255,255,255,0.06);
         padding: 1.2rem 2rem;
         margin: -1rem -1rem 2rem -1rem;
@@ -467,7 +467,7 @@ st.markdown("""
         justify-content: space-between;
     }
     .header-title {
-        color: #fff;
+        color: #222;
         font-size: 1.2rem;
         font-weight: 800;
         letter-spacing: -0.5px;
@@ -480,7 +480,7 @@ st.markdown("""
         gap: 24px;
     }
     .header-nav-item {
-        color: #555;
+        color: #888;
         font-size: 0.8rem;
         font-weight: 500;
         padding: 6px 14px;
@@ -488,7 +488,7 @@ st.markdown("""
         transition: all 0.3s;
     }
     .header-nav-active {
-        color: #c0c0e0;
+        color: #333333;
         background: rgba(138,92,246,0.1);
     }
 
@@ -504,10 +504,10 @@ st.markdown("""
 
     /* 입력 */
     .stTextInput input, .stTextArea textarea {
-        background: rgba(255,255,255,0.04) !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: #FFFFFF !important;
+        border: 1px solid #D0D0D0 !important;
         border-radius: 10px !important;
-        color: #e0e0f0 !important;
+        color: #333333 !important;
         transition: border-color 0.3s !important;
     }
     .stTextInput input:focus, .stTextArea textarea:focus {
@@ -515,23 +515,23 @@ st.markdown("""
         box-shadow: 0 0 0 1px rgba(138,92,246,0.2) !important;
     }
     [data-testid="stSelectbox"] > div > div {
-        background: rgba(255,255,255,0.04) !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: #FFFFFF !important;
+        border: 1px solid #D0D0D0 !important;
         border-radius: 10px !important;
-        color: #e0e0f0 !important;
+        color: #333333 !important;
     }
     [data-testid="stDateInput"] > div > div {
-        background: rgba(255,255,255,0.04) !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: #FFFFFF !important;
+        border: 1px solid #D0D0D0 !important;
         border-radius: 10px !important;
     }
-    [data-testid="stDateInput"] input { color: #e0e0f0 !important; }
+    [data-testid="stDateInput"] input { color: #333333 !important; }
     label, .stTextInput label, .stSelectbox label,
     [data-testid="stWidgetLabel"] p {
-        color: #8888aa !important;
+        color: #555555 !important;
         font-size: 0.85rem !important;
     }
-    .stMarkdown p, .stMarkdown li { color: #b0b0cc !important; }
+    .stMarkdown p, .stMarkdown li { color: #444444 !important; }
 
     /* 버튼 */
     .stButton > button {
@@ -568,8 +568,8 @@ st.markdown("""
 
     /* 업로더 */
     [data-testid="stFileUploader"] {
-        background: rgba(255,255,255,0.02);
-        border: 1px dashed rgba(255,255,255,0.1);
+        background: #FFFFFF;
+        border: 1px dashed #C0C0C0;
         border-radius: 10px;
         padding: 1.2rem;
     }
@@ -579,9 +579,9 @@ st.markdown("""
 
     /* Expander */
     .streamlit-expanderHeader {
-        background: rgba(255,255,255,0.03) !important;
+        background: #FFFFFF !important;
         border-radius: 10px !important;
-        color: #b0b0cc !important;
+        color: #444444 !important;
         font-weight: 500 !important;
     }
     .streamlit-expanderContent {
@@ -855,7 +855,7 @@ if generate_btn and topic:
     <div class="glass-card">
         <div style="color: #8B5CF6; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 0.5rem;">LIVE COMMERCE STORYBOARD</div>
         <div style="color: #e0e0f0; font-size: 1.3rem; font-weight: 800;">{sb_data.get('title', topic)}</div>
-        <div style="color: #666688; font-size: 0.85rem; margin-top: 4px;">{sb_data.get('platform', broadcast_platform)} | {sb_data.get('total_duration', broadcast_duration)} | {sb_data.get('hosts', hosts)} | {len(sb_data.get('scenes', []))}개 구간</div>
+        <div style="color: #777777; font-size: 0.85rem; margin-top: 4px;">{sb_data.get('platform', broadcast_platform)} | {sb_data.get('total_duration', broadcast_duration)} | {sb_data.get('hosts', hosts)} | {len(sb_data.get('scenes', []))}개 구간</div>
     </div>
     """, unsafe_allow_html=True)
 
