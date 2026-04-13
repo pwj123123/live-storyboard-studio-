@@ -148,9 +148,10 @@ def fetch_product_info(url):
 
 
 def create_storyboard_ppt(sb_data, topic, tone):
-    """스토리보드 PPT — 메리쏘드 실무 구성 기반, EMU 단위 전용"""
+    """스토리보드 PPT — 메리쏘드 PPT 구조 정밀 복제"""
     from pptx.oxml.ns import qn
     from pptx.util import Emu
+    from copy import deepcopy
 
     prs = Presentation()
     prs.slide_width = Emu(9144000)
@@ -162,29 +163,6 @@ def create_storyboard_ppt(sb_data, topic, tone):
     C_BLACK = RGBColor(0x33, 0x33, 0x33)
     C_GRAY = RGBColor(0x66, 0x66, 0x66)
 
-    def _cbg(cell, hx):
-        tc = cell._tc.get_or_add_tcPr()
-        for s in tc.findall(qn('a:solidFill')):
-            tc.remove(s)
-        sf = tc.makeelement(qn('a:solidFill'), {})
-        sf.append(sf.makeelement(qn('a:srgbClr'), {'val': hx}))
-        tc.append(sf)
-
-    def _fc(cell, txt, sz=9, b=False, clr=C_BLACK, al=PP_ALIGN.LEFT):
-        cell.text = ""
-        tf = cell.text_frame
-        tf.word_wrap = True
-        for i, ln in enumerate(str(txt).split("\n")):
-            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-            p.text = ln
-            p.font.size = Pt(sz)
-            p.font.bold = b
-            p.font.color.rgb = clr
-            p.alignment = al
-            p.space_before = Pt(1)
-            p.space_after = Pt(1)
-        cell.vertical_anchor = MSO_ANCHOR.TOP
-
     def _to_s(v):
         if isinstance(v, dict):
             return "\n".join([f"{k}: {vl}" for k, vl in v.items()])
@@ -192,20 +170,113 @@ def create_storyboard_ppt(sb_data, topic, tone):
             return "\n".join([f"- {x}" if isinstance(x, str) else str(x) for x in v])
         return str(v) if v else ""
 
-    def _hdr(slide, txt):
-        r = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(0), Emu(0), Emu(9144000), Emu(457200))
-        r.fill.solid()
-        r.fill.fore_color.rgb = C_DARK
-        r.line.color.rgb = C_DARK
-        r.line.width = Pt(0)
-        tf = r.text_frame
+    def _set_cell(cell, text, font_size=9, bold=False, color=C_BLACK, align=PP_ALIGN.LEFT):
+        """셀에 텍스트+스타일 적용"""
+        cell.text = ""
+        tf = cell.text_frame
+        tf.word_wrap = True
+        lines = str(text).split("\n")
+        for i, line in enumerate(lines):
+            p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+            p.text = line
+            p.font.size = Pt(font_size)
+            p.font.bold = bold
+            p.font.color.rgb = color
+            p.alignment = align
+            p.space_before = Pt(1)
+            p.space_after = Pt(1)
+        cell.vertical_anchor = MSO_ANCHOR.TOP
+
+    def _set_cell_bg(cell, hex_color):
+        """셀 배경색 (가장 안전한 방식)"""
+        tcPr = cell._tc.get_or_add_tcPr()
+        for sf in tcPr.findall(qn('a:solidFill')):
+            tcPr.remove(sf)
+        solidFill = tcPr.makeelement(qn('a:solidFill'), {})
+        srgbClr = solidFill.makeelement(qn('a:srgbClr'), {'val': hex_color})
+        solidFill.append(srgbClr)
+        tcPr.append(solidFill)
+
+    def _add_header_textbox(slide, text):
+        """메리쏘드와 동일: 상단 헤더 텍스트박스 (left=61625, top=~0)"""
+        # 헤더 배경 사각형
+        rect = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(0), Emu(0), Emu(9144000), Emu(580500))
+        rect.fill.solid()
+        rect.fill.fore_color.rgb = C_DARK
+        rect.line.color.rgb = C_DARK
+        rect.line.width = Emu(0)
+        # 헤더 텍스트
+        tf = rect.text_frame
         tf.margin_left = Emu(200000)
-        tf.margin_top = Emu(80000)
+        tf.margin_top = Emu(120000)
         p = tf.paragraphs[0]
-        p.text = txt
-        p.font.size = Pt(14)
+        p.text = text
+        p.font.size = Pt(16)
         p.font.bold = True
         p.font.color.rgb = C_WHITE
+
+    def _add_content_table(slide, rows_data, col_widths):
+        """메리쏘드와 동일 위치/크기의 4열 테이블 생성"""
+        n_rows = len(rows_data)
+        n_cols = len(rows_data[0])
+        total_w = sum(col_widths)
+
+        # 메리쏘드 동일 위치: left=237900, top=665375
+        tbl_shape = slide.shapes.add_table(n_rows, n_cols, Emu(237900), Emu(665375), Emu(total_w), Emu(4300000))
+        table = tbl_shape.table
+
+        # 테이블 스타일 초기화
+        tbl_el = table._tbl
+        tblPr = tbl_el.find(qn('a:tblPr'))
+        if tblPr is not None:
+            for attr in ['firstRow', 'bandRow', 'lastRow', 'firstCol', 'lastCol']:
+                tblPr.attrib.pop(attr, None)
+
+        # 열 너비
+        for i, w in enumerate(col_widths):
+            table.columns[i].width = Emu(w)
+
+        # 헤더 행 높이
+        table.rows[0].height = Emu(380000)
+
+        # 본문 행 높이 (남은 공간 균등 배분)
+        body_rows = n_rows - 1
+        if body_rows > 0:
+            remaining = 4300000 - 380000
+            row_h = remaining // body_rows
+            for r in range(1, n_rows):
+                table.rows[r].height = Emu(row_h)
+
+        # 셀 채우기
+        for r_idx, row in enumerate(rows_data):
+            for c_idx, val in enumerate(row):
+                cell = table.cell(r_idx, c_idx)
+                if r_idx == 0:
+                    # 헤더
+                    _set_cell(cell, val, font_size=9, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+                    _set_cell_bg(cell, '2D2D3F')
+                elif c_idx == 0:
+                    # 구분 열
+                    _set_cell(cell, val, font_size=9, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+                    _set_cell_bg(cell, '2D2D3F')
+                elif c_idx == 1:
+                    # 시간/시연 열
+                    _set_cell(cell, val, font_size=9, color=C_BLACK, align=PP_ALIGN.CENTER)
+                    _set_cell_bg(cell, 'FFFFFF')
+                elif c_idx == 2:
+                    # 상세 열 (내용 길이에 따라 글자 크기 조절)
+                    sz = 9 if len(str(val)) < 300 else 8 if len(str(val)) < 600 else 7
+                    _set_cell(cell, val, font_size=sz, color=C_BLACK)
+                    _set_cell_bg(cell, 'FFFFFF')
+                else:
+                    # 기타 열
+                    _set_cell(cell, val, font_size=8, color=C_GRAY)
+                    _set_cell_bg(cell, 'FFFFFF')
+
+        return tbl_shape
+
+    # 열 너비 (메리쏘드 기준)
+    COL_W = [643600, 629075, 5228475, 2167050]  # 구분/시간/상세/기타
 
     brand = sb_data.get("title", topic)
     platform = sb_data.get("platform", "")
@@ -213,77 +284,86 @@ def create_storyboard_ppt(sb_data, topic, tone):
     dur = sb_data.get("total_duration", "")
     scenes = sb_data.get("scenes", [])
 
-    # ── 표지 ──
+    # ════════════════════════════════════════
+    # 슬라이드 1: 표지 (메리쏘드 동일)
+    # ════════════════════════════════════════
     s1 = prs.slides.add_slide(prs.slide_layouts[6])
-    top_r = s1.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(0), Emu(0), Emu(9144000), Emu(2200000))
-    top_r.fill.solid()
-    top_r.fill.fore_color.rgb = C_DARK
-    top_r.line.color.rgb = C_DARK
-
-    tb = s1.shapes.add_textbox(Emu(400000), Emu(500000), Emu(8300000), Emu(800000))
-    p = tb.text_frame.paragraphs[0]
+    # 브랜드명 텍스트 (메리쏘드: left=1506900, top=879125)
+    tb = s1.shapes.add_textbox(Emu(1506900), Emu(879125), Emu(6130200), Emu(1327500))
+    tf = tb.text_frame
+    p = tf.paragraphs[0]
     p.text = brand
-    p.font.size = Pt(28)
+    p.font.size = Pt(36)
     p.font.bold = True
-    p.font.color.rgb = C_WHITE
-    p.alignment = PP_ALIGN.CENTER
-
-    tb2 = s1.shapes.add_textbox(Emu(400000), Emu(1300000), Emu(8300000), Emu(400000))
-    p2 = tb2.text_frame.paragraphs[0]
-    p2.text = f"{platform} 라이브커머스 스토리보드"
-    p2.font.size = Pt(11)
-    p2.font.color.rgb = RGBColor(0xCC, 0xCC, 0xDD)
-    p2.alignment = PP_ALIGN.CENTER
-
-    it = s1.shapes.add_table(4, 2, Emu(2700000), Emu(2600000), Emu(4000000), Emu(1800000))
-    t = it.table
-    t.columns[0].width = Emu(1000000)
-    t.columns[1].width = Emu(3000000)
+    p.font.color.rgb = C_BLACK
+    p.alignment = PP_ALIGN.LEFT
+    p2 = tf.add_paragraph()
+    p2.text = f"{platform} 스토리보드"
+    p2.font.size = Pt(16)
+    p2.font.color.rgb = C_GRAY
+    # 정보 테이블 (메리쏘드: left=1284825, top=2271875)
+    info_shape = s1.shapes.add_table(4, 2, Emu(1284825), Emu(2271875), Emu(6574350), Emu(1524000))
+    it = info_shape.table
+    tblPr = it._tbl.find(qn('a:tblPr'))
+    if tblPr is not None:
+        for attr in ['firstRow', 'bandRow', 'lastRow', 'firstCol', 'lastCol']:
+            tblPr.attrib.pop(attr, None)
+    it.columns[0].width = Emu(975400)
+    it.columns[1].width = Emu(5598950)
     for ri, (lb, vl) in enumerate([
-        ("일시", sb_data.get("broadcast_datetime", datetime.now().strftime("%Y.%m.%d"))),
-        ("장소", sb_data.get("broadcast_location", "")),
+        ("일시", sb_data.get("broadcast_datetime", datetime.now().strftime("%Y년 %m월 %d일"))),
+        ("장소", sb_data.get("broadcast_location", "(미정)")),
         ("진행", hosts_name),
-        ("플랫폼", platform),
+        ("콜타임", "라이브 1시간 전"),
     ]):
-        _fc(t.cell(ri, 0), lb, sz=9, b=True, clr=C_WHITE, al=PP_ALIGN.CENTER)
-        _cbg(t.cell(ri, 0), '2D2D3F')
-        _fc(t.cell(ri, 1), vl, sz=9, clr=C_BLACK)
-        _cbg(t.cell(ri, 1), 'FFFFFF')
+        _set_cell(it.cell(ri, 0), lb, font_size=9, bold=True, color=C_BLACK, align=PP_ALIGN.CENTER)
+        _set_cell_bg(it.cell(ri, 0), 'E8E8E8')
+        _set_cell(it.cell(ri, 1), vl, font_size=9, color=C_BLACK)
+        _set_cell_bg(it.cell(ri, 1), 'FFFFFF')
 
-    # ── 전체 플로우 ──
+    # ════════════════════════════════════════
+    # 슬라이드 2: 전체 플로우
+    # ════════════════════════════════════════
     s2 = prs.slides.add_slide(prs.slide_layouts[6])
-    _hdr(s2, "전체 플로우 - (실제 상황에 따라 상이할 수 있음)")
+    _add_header_textbox(s2, "전체 플로우 - (실제 상황에 따라 상이할 수 있음)")
     n = len(scenes)
     if n > 0:
-        cw = min(Emu(1500000), Emu(8400000) // n)
+        cw = min(1500000, 8400000 // n)
         tw = cw * n
-        sx = (Emu(9144000) - tw) // 2
-        ft = s2.shapes.add_table(2, n, sx, Emu(1200000), tw, Emu(2000000))
-        ft_t = ft.table
+        sx = (9144000 - tw) // 2
+        ft_shape = s2.shapes.add_table(2, n, Emu(sx), Emu(1500000), Emu(tw), Emu(2500000))
+        ft = ft_shape.table
+        tblPr = ft._tbl.find(qn('a:tblPr'))
+        if tblPr is not None:
+            for attr in ['firstRow', 'bandRow', 'lastRow', 'firstCol', 'lastCol']:
+                tblPr.attrib.pop(attr, None)
         for c in range(n):
-            ft_t.columns[c].width = cw
-        ft_t.rows[0].height = Emu(500000)
-        ft_t.rows[1].height = Emu(1500000)
+            ft.columns[c].width = Emu(cw)
+        ft.rows[0].height = Emu(600000)
+        ft.rows[1].height = Emu(1900000)
         for c, sc in enumerate(scenes):
-            _fc(ft_t.cell(0, c), str(c+1), sz=12, b=True, clr=C_WHITE, al=PP_ALIGN.CENTER)
-            _cbg(ft_t.cell(0, c), 'E85D26')
+            _set_cell(ft.cell(0, c), str(c+1), font_size=14, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+            _set_cell_bg(ft.cell(0, c), 'E85D26')
             sec = sc.get("section", "")
-            _fc(ft_t.cell(1, c), sec, sz=8, b=True, clr=C_BLACK, al=PP_ALIGN.CENTER)
-            _cbg(ft_t.cell(1, c), 'E8EEF7' if c % 2 == 0 else 'FFFFFF')
+            _set_cell(ft.cell(1, c), sec, font_size=8, bold=True, color=C_BLACK, align=PP_ALIGN.CENTER)
+            _set_cell_bg(ft.cell(1, c), 'E8EEF7' if c % 2 == 0 else 'FFFFFF')
 
     concept = sb_data.get("live_concept", "")
     if concept:
-        tc = s2.shapes.add_textbox(Emu(300000), Emu(3600000), Emu(8500000), Emu(500000))
+        tc = s2.shapes.add_textbox(Emu(300000), Emu(4200000), Emu(8500000), Emu(500000))
         pc = tc.text_frame.paragraphs[0]
         pc.text = f"컨셉: {concept}"
         pc.font.size = Pt(10)
         pc.font.color.rgb = C_GRAY
         pc.font.bold = True
 
-    # ── 구간별 상세 슬라이드 (4열 테이블) ──
+    # ════════════════════════════════════════
+    # 슬라이드 3~: 구간별 상세 (메리쏘드 4열 테이블)
+    # ════════════════════════════════════════
     for sc in scenes:
         sl = prs.slides.add_slide(prs.slide_layouts[6])
-        _hdr(sl, f"방송 정보 - {sc.get('section', '')}")
+        section = sc.get("section", "")
+        _add_header_textbox(sl, f"방송 정보 - {section}")
 
         script = _to_s(sc.get("host_script", ""))
         screen = _to_s(sc.get("screen_display", ""))
@@ -291,82 +371,70 @@ def create_storyboard_ppt(sb_data, topic, tone):
         direction = _to_s(sc.get("direction_note", ""))
         viewer = _to_s(sc.get("viewer_action", ""))
 
-        parts = []
+        # 상세 열 조합
+        detail_parts = []
         if script:
-            parts.append(script)
+            detail_parts.append(script)
         if prod and prod != script:
-            parts.append(f"\n[제품/혜택]\n{prod}")
+            detail_parts.append(f"\n[제품/혜택]\n{prod}")
         if screen:
-            parts.append(f"\n[화면 표시]\n{screen}")
-        detail = "\n".join(parts)
+            detail_parts.append(f"\n[화면 표시]\n{screen}")
+        detail = "\n".join(detail_parts)
 
-        ep = []
+        # 기타 열
+        etc_parts = []
         if direction:
-            ep.append(direction)
+            etc_parts.append(direction)
         if viewer:
-            ep.append(f"시청자 유도:\n{viewer}")
-        etc = "\n".join(ep)
+            etc_parts.append(f"시청자 유도:\n{viewer}")
+        etc = "\n".join(etc_parts)
 
-        sec_name = sc.get("section", "")
+        # 구분 열 줄바꿈
+        sec_display = "\n".join(section.split(" ")) if len(section) > 6 else section
 
-        # 2행 4열 테이블 — 슬라이드 꽉 차게
-        tbl = sl.shapes.add_table(2, 4, Emu(237900), Emu(665375), Emu(8668200), Emu(4300000))
-        t = tbl.table
-        t.columns[0].width = Emu(643600)
-        t.columns[1].width = Emu(629075)
-        t.columns[2].width = Emu(5228475)
-        t.columns[3].width = Emu(2167050)
-        t.rows[0].height = Emu(350000)
-        t.rows[1].height = Emu(3950000)
+        # 헤더 결정: 제품/사은품 슬라이드면 '시연', 나머지는 '시간'
+        is_product = any(kw in section for kw in ["제품", "소구", "사은품"])
+        header_2 = "시연" if is_product else "시간"
 
-        for c, h in enumerate(["구분", "시간", "상세", "기타"]):
-            _fc(t.cell(0, c), h, sz=9, b=True, clr=C_WHITE, al=PP_ALIGN.CENTER)
-            _cbg(t.cell(0, c), '2D2D3F')
+        # 시연 열: 제품이면 시연 방법, 아니면 시간
+        col2_val = ""
+        if is_product:
+            # direction_note에서 시연 관련 내용 추출
+            if "손등" in direction or "얼굴" in direction or "입술" in direction:
+                demo_parts = []
+                for kw in ["손등", "얼굴", "입술", "팔", "손목"]:
+                    if kw in direction:
+                        demo_parts.append(kw)
+                col2_val = "\n/\n".join(demo_parts) if demo_parts else "손등\n/\n얼굴"
+            else:
+                col2_val = "손등\n/\n얼굴"
+        else:
+            col2_val = sc.get("duration", "")
 
-        _fc(t.cell(1, 0), sec_name, sz=9, b=True, clr=C_WHITE, al=PP_ALIGN.CENTER)
-        _cbg(t.cell(1, 0), '2D2D3F')
-        _fc(t.cell(1, 1), sc.get("duration", ""), sz=9, clr=C_BLACK, al=PP_ALIGN.CENTER)
-        _cbg(t.cell(1, 1), 'FFFFFF')
+        rows = [
+            ["구분", header_2, "상세", "기타"],
+            [sec_display, col2_val, detail, etc],
+        ]
 
-        # 상세 열: 내용 길이에 따라 글자 크기 조절
-        detail_sz = 9 if len(detail) < 400 else 8 if len(detail) < 700 else 7
-        _fc(t.cell(1, 2), detail, sz=detail_sz, clr=C_BLACK)
-        _cbg(t.cell(1, 2), 'FFFFFF')
+        _add_content_table(sl, rows, COL_W)
 
-        etc_sz = 9 if len(etc) < 200 else 8 if len(etc) < 400 else 7
-        _fc(t.cell(1, 3), etc, sz=etc_sz, clr=C_GRAY)
-        _cbg(t.cell(1, 3), 'FFFFFF')
-
-    # ── 마지막: 컨셉 & 혜택 ──
+    # ════════════════════════════════════════
+    # 마지막: 이벤트 & 클로징 정보
+    # ════════════════════════════════════════
     sl_e = prs.slides.add_slide(prs.slide_layouts[6])
-    _hdr(sl_e, "라이브 컨셉 & 핵심 혜택")
+    _add_header_textbox(sl_e, "라이브 컨셉 & 핵심 혜택")
 
     benefits = sb_data.get("key_benefits", [])
     bt = "\n".join([f"{i+1}. {b}" for i, b in enumerate(benefits)])
 
-    rd = [
-        ["항목", "내용"],
-        ["라이브 컨셉", sb_data.get("live_concept", "")],
-        ["핵심 혜택", bt],
-        ["진행자", hosts_name],
-        ["톤앤매너", tone],
+    rows = [
+        ["항목", "", "내용", ""],
+        ["라이브\n컨셉", "", sb_data.get("live_concept", ""), ""],
+        ["핵심\n혜택", "", bt, ""],
+        ["진행자", "", hosts_name, ""],
+        ["톤앤매너", "", tone, ""],
     ]
-    tl = sl_e.shapes.add_table(len(rd), 2, Emu(237900), Emu(665375), Emu(8668200), Emu(4000000))
-    tlt = tl.table
-    tlt.columns[0].width = Emu(1500000)
-    tlt.columns[1].width = Emu(7168200)
-    for ri, row in enumerate(rd):
-        for ci, val in enumerate(row):
-            cell = tlt.cell(ri, ci)
-            if ri == 0:
-                _fc(cell, val, sz=9, b=True, clr=C_WHITE, al=PP_ALIGN.CENTER)
-                _cbg(cell, '2D2D3F')
-            elif ci == 0:
-                _fc(cell, val, sz=9, b=True, clr=C_WHITE, al=PP_ALIGN.CENTER)
-                _cbg(cell, '2D2D3F')
-            else:
-                _fc(cell, val, sz=9, clr=C_BLACK)
-                _cbg(cell, 'FFFFFF')
+    _add_content_table(sl_e, rows, COL_W)
 
     buf = io.BytesIO()
     prs.save(buf)
@@ -712,20 +780,37 @@ if generate_btn and topic:
 {product_context}
 
 [규칙]
-- 아래 순서대로 구성하되, 각 구간을 별도 scene으로 만들어:
-  1. 오프닝 (인사, 오늘 방송 소개, 시청자 맞이)
-  2. 브랜드 소개 (브랜드 히스토리, 수상 이력, 신뢰도)
-  3. 라이브 혜택 소개 (쿠폰, 사은품, 이벤트 등 상세하게)
-  4. 가격 소개 (제품별 정상가/할인가/쿠폰적용가)
-  5. 사은품 소구 포인트 (사은품 제품 설명)
-  6. 제품별 상세 소개 (제품마다 별도 scene — 소구포인트, 색상, 추천 대상, 시연 방법)
-  7. 이벤트 당첨자 발표 & 클로징
+- 반드시 아래 순서로 scene을 만들어. 각 구간이 별도 scene이야:
 
-- 60분 방송이면 최소 8~12개 scene, 90분이면 12~15개 scene
+  1. "오프닝 & 브랜드 소개" (1개 scene)
+     - 쇼호스트 인사, 오늘 방송 소개, 브랜드 수상이력/신뢰도
+     - host_script에 오프닝 대본 + 브랜드 소개 대본을 함께 작성
+
+  2. "혜택 소개" (1개 scene)
+     - 라이브 혜택 전체 (쿠폰, 사은품, 이벤트 등)
+     - 모든 혜택을 번호로 상세히 나열
+
+  3. "가격 소개" (1개 scene)
+     - 모든 제품의 정상가/할인가/쿠폰적용가/할인율
+     - 구성품(본품+리필+퍼프 등)도 포함
+
+  4. "사은품 소구 포인트" (1개 scene)
+     - 사은품 제품들의 특징, 소구포인트
+     - 사은품별로 #해시태그 + 소구포인트 나열
+
+  5. "[제품명] 제품 소개" (제품마다 각각 1개 scene)
+     - 소구포인트 (성분, 효능, 특징을 구체적으로)
+     - 색상별 추천 피부톤
+     - "이런 분들께 추천" 항목
+     - 기능성 (SPF, PA 등)
+     - direction_note에 시연 방법 (손등시연/얼굴시연/입술시연 등 제품에 맞게)
+
+  6. "이벤트 당첨자 발표 & 클로징" (1개 scene)
+     - 이벤트 당첨자 발표 + 혜택 리마인드 + 마무리 인사
+
 - host_script는 실제 방송에서 바로 읽을 수 있는 대화체, 최소 300자 이상
-- product_info는 제품 특징, 성분, 가격, 색상 등 구체적으로
-- screen_display는 화면에 표시할 배너/자막/가격표 내용
-- direction_note는 카메라 앵글, 시연 방법, 클로즈업 등
+- 제품 소개 scene의 host_script는 500자 이상으로 상세하게
+- direction_note의 시연은 제품 특성에 맞게 (쿠션=손등/얼굴, 틴트=입술, 클렌징=세정 시연 등)
 - 반드시 JSON만 출력. 설명 텍스트 금지.
 
 ```json
@@ -739,13 +824,13 @@ if generate_btn and topic:
   "scenes": [
     {{
       "scene_number": 1,
-      "duration": "시간범위",
-      "section": "구간명",
-      "host_script": "쇼호스트 대본 (최소 300자, 대화체)",
-      "screen_display": "화면에 표시할 배너/자막/가격표",
-      "product_info": "제품/혜택 상세 정보",
-      "direction_note": "연출 지시 (카메라, 시연, 소품)",
-      "viewer_action": "시청자 유도 액션"
+      "section": "오프닝 & 브랜드 소개",
+      "duration": "",
+      "host_script": "쇼호스트 대본 (대화체, 최소 300자)",
+      "screen_display": "화면 표시 내용",
+      "product_info": "제품/혜택 정보",
+      "direction_note": "연출/시연 지시",
+      "viewer_action": "시청자 유도"
     }}
   ],
   "live_concept": "컨셉 한줄",
