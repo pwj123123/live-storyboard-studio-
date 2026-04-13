@@ -265,12 +265,12 @@ def create_storyboard_ppt(sb_data, topic, tone):
                     _set_cell_bg(cell, 'FFFFFF')
                 elif c_idx == 2:
                     # 상세 열 (내용 길이에 따라 글자 크기 조절)
-                    sz = 9 if len(str(val)) < 300 else 8 if len(str(val)) < 600 else 7
+                    sz = 11 if len(str(val)) < 200 else 10 if len(str(val)) < 500 else 9
                     _set_cell(cell, val, font_size=sz, color=C_BLACK)
                     _set_cell_bg(cell, 'FFFFFF')
                 else:
                     # 기타 열
-                    _set_cell(cell, val, font_size=8, color=C_GRAY)
+                    _set_cell(cell, val, font_size=9, color=C_GRAY)
                     _set_cell_bg(cell, 'FFFFFF')
 
         return tbl_shape
@@ -371,14 +371,12 @@ def create_storyboard_ppt(sb_data, topic, tone):
         direction = _to_s(sc.get("direction_note", ""))
         viewer = _to_s(sc.get("viewer_action", ""))
 
-        # 상세 열 조합
+        # 상세 열 조합 (화면 표시 제외)
         detail_parts = []
         if script:
             detail_parts.append(script)
         if prod and prod != script:
             detail_parts.append(f"\n[제품/혜택]\n{prod}")
-        if screen:
-            detail_parts.append(f"\n[화면 표시]\n{screen}")
         detail = "\n".join(detail_parts)
 
         # 기타 열
@@ -396,20 +394,16 @@ def create_storyboard_ppt(sb_data, topic, tone):
         is_product = any(kw in section for kw in ["제품", "소구", "사은품"])
         header_2 = "시연" if is_product else "시간"
 
-        # 시연 열: 제품이면 시연 방법, 아니면 시간
-        col2_val = ""
+        # 2열: 씬 번호 (#1, #2...) + 제품이면 시연 방법 추가
+        scene_num = sc.get("scene_number", "")
+        col2_val = f"#{scene_num}"
         if is_product:
-            # direction_note에서 시연 관련 내용 추출
-            if "손등" in direction or "얼굴" in direction or "입술" in direction:
-                demo_parts = []
-                for kw in ["손등", "얼굴", "입술", "팔", "손목"]:
-                    if kw in direction:
-                        demo_parts.append(kw)
-                col2_val = "\n/\n".join(demo_parts) if demo_parts else "손등\n/\n얼굴"
-            else:
-                col2_val = "손등\n/\n얼굴"
-        else:
-            col2_val = sc.get("duration", "")
+            demo_parts = []
+            for kw in ["손등", "얼굴", "입술", "팔", "손목", "시식", "급여", "개봉"]:
+                if kw in direction:
+                    demo_parts.append(kw)
+            if demo_parts:
+                col2_val += "\n/\n" + "\n/\n".join(demo_parts)
 
         rows = [
             ["구분", header_2, "상세", "기타"],
@@ -857,9 +851,7 @@ if generate_btn and topic:
     {{
       "scene_number": 1,
       "section": "오프닝 & 브랜드 소개",
-      "duration": "",
       "host_script": "쇼호스트 대본 (대화체, 최소 300자)",
-      "screen_display": "화면 표시 내용",
       "product_info": "제품/혜택 정보",
       "direction_note": "연출/시연 지시",
       "viewer_action": "시청자 유도"
