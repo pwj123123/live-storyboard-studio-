@@ -754,16 +754,48 @@ if generate_btn and topic:
         parts.append("\n\n---\n\n".join(all_fetched))
     product_info = "\n\n===\n\n".join(parts)
 
-    # 5) AI 스토리보드 생성
-    with st.spinner("AI가 스토리보드를 구성하고 있습니다..."):
+    # 5) 1단계: AI가 상품을 먼저 분석
+    product_analysis = ""
+    if product_info:
+        with st.spinner("1/2 — AI가 상품을 분석하고 있습니다..."):
+            analysis_prompt = f"""아래는 라이브커머스 제품 소개서와 상품 페이지에서 가져온 정보야.
+이 정보를 분석해서 아래 형식으로 정리해줘.
+
+{product_info}
+
+[정리 형식]
+1. 브랜드 개요: 브랜드명, 특징, 수상이력, 셀링포인트
+2. 상품 목록: 각 상품마다
+   - 상품명
+   - 카테고리 (어떤 종류의 상품인지)
+   - 구성품 (본품+리필+사은품 등)
+   - 정상가 / 할인가 / 할인율
+   - 핵심 특장점 3~5가지
+   - 성분/원료 특징
+   - 추천 대상 (어떤 사람/상황에 적합한지)
+   - 시연 방법 추천 (이 상품을 어떻게 보여주면 효과적인지)
+3. 라이브 혜택: 쿠폰, 사은품, 이벤트 정리
+4. 전체 셀링포인트: 이 방송에서 강조할 핵심 메시지"""
+
+            product_analysis = call_claude(analysis_prompt)
+            st.success("상품 분석 완료!")
+            with st.expander("AI 상품 분석 결과"):
+                st.markdown(product_analysis)
+
+    # 6) 2단계: 분석 결과 기반으로 스토리보드 생성
+    with st.spinner("2/2 — AI가 스토리보드를 제작하고 있습니다..."):
         product_context = ""
-        if product_info:
+        if product_analysis:
             product_context = f"""
 
-아래는 제품 소개서와 실제 상품 페이지에서 가져온 정보야.
-각 상품의 실제 이름, 가격, 특징, 장점, 셀링포인트 등을 대본과 자막에 구체적으로 반영해줘.
-상품이 여러 개면 각 상품을 자연스럽게 소개하는 장면을 포함해줘.
+[AI가 분석한 상품 정보]
+{product_analysis}
 
+[원본 제품 소개서]
+{product_info[:2000]}
+"""
+        elif product_info:
+            product_context = f"""
 {product_info}
 """
 
