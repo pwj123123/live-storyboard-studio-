@@ -5,6 +5,7 @@ import os
 import io
 import json
 import re
+import uuid
 from datetime import datetime
 
 import requests
@@ -17,9 +18,21 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
+import jobs as jobs_mod
+
 load_dotenv()
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+
+def _get_user_id() -> str:
+    """베타 단계: 쿼리스트링(?user=foo) 또는 세션. 추후 Supabase 인증으로 교체."""
+    qs = st.query_params
+    if "user" in qs:
+        st.session_state["user_id"] = qs["user"]
+    if "user_id" not in st.session_state:
+        st.session_state["user_id"] = uuid.uuid4().hex[:12]
+    return st.session_state["user_id"]
 
 SYSTEM_PROMPT = """당신은 라이브커머스 방송 전문 스토리보드 작가입니다.
 제품 소개서를 기반으로 라이브 방송의 전체 흐름(오프닝~클로징)을 구성하고,
@@ -623,6 +636,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# 사용자 ID 초기화 (베타: 익명 세션 기반)
+USER_ID = _get_user_id()
+
 # ─────────────────────────────────────────
 # 입력 폼
 # ─────────────────────────────────────────
@@ -705,11 +721,29 @@ generate_btn = st.button(
 if generate_btn and topic:
     st.markdown("---")
 
+    # 작업 생성 (진행상황 페이지 / 향후 iOS Live Activity가 같은 데이터를 읽음)
+    job_id = jobs_mod.create_job(
+        user_id=USER_ID,
+        type="storyboard",
+        title=topic,
+        total_steps=5,
+    )
+    st.session_state["current_job_id"] = job_id
+
+    st.caption(
+        f"작업 ID: `{job_id}` · "
+        f"[📱 진행상황 페이지에서 보기](/진행상황?user={USER_ID})"
+    )
+
     excel_data = None
     urls_to_fetch = []
     product_info = ""
 
     # 1) 엑셀 파싱
+    jobs_mod.update_progress(
+        job_id, status=jobs_mod.STATUS_RUNNING,
+        progress=5, step_index=1, current_step="제품 소개서 분석 중...",
+    )
     if uploaded_excel:
         with st.spinner("제품 소개서 분석 중..."):
             excel_data = parse_excel_products(uploaded_excel.getvalue())
@@ -725,6 +759,10 @@ if generate_btn and topic:
                 urls_to_fetch.append(u)
 
     # 3) URL에서 상품 정보 수집 (실패해도 계속 진행)
+    jobs_mod.update_progress(
+        job_id, progress=20, step_index=2,
+        current_step=f"상품 페이지 {len(urls_to_fetch)}개에서 정보 수집 중...",
+    )
     all_fetched = []
     failed_count = 0
     if urls_to_fetch:
@@ -749,6 +787,10 @@ if generate_btn and topic:
     product_info = "\n\n===\n\n".join(parts)
 
     # 5) 1단계: AI가 상품을 먼저 분석
+    jobs_mod.update_progress(
+        job_id, progress=40, step_index=3,
+        current_step="AI가 상품을 분석하고 있습니다...",
+    )
     product_analysis = ""
     if product_info:
         with st.spinner("1/2 — AI가 상품을 분석하고 있습니다..."):
@@ -777,6 +819,10 @@ if generate_btn and topic:
                 st.markdown(product_analysis)
 
     # 6) 2단계: 분석 결과 기반으로 스토리보드 생성
+    jobs_mod.update_progress(
+        job_id, progress=65, step_index=4,
+        current_step="AI가 스토리보드를 제작하고 있습니다...",
+    )
     with st.spinner("2/2 — AI가 스토리보드를 제작하고 있습니다..."):
         product_context = ""
         if product_analysis:
@@ -906,6 +952,7 @@ if generate_btn and topic:
                     pass
 
         if sb_data is None:
+            jobs_mod.fail_job(job_id, "스토리보드 JSON 파싱 실패")
             st.error("스토리보드 생성에 실패했습니다. 다시 시도해주세요.")
             with st.expander("AI 응답 원문 (디버깅용)"):
                 st.code(sb_result)
@@ -954,12 +1001,27 @@ if generate_btn and topic:
                 st.markdown(f"**시청자 유도:** {_preview_str(scene.get('viewer_action', ''))}")
 
     # 7) PPT 다운로드
+    jobs_mod.update_progress(
+        job_id, progress=90, step_index=5,
+        current_step="PPT 파일 생성 중...",
+    )
     with st.spinner("PPT 파일 생성 중..."):
         ppt_bytes = create_storyboard_ppt(sb_data, topic, style)
 
+    filename = f"라이브커머스_스토리보드_{topic[:15]}_{datetime.now().strftime('%Y%m%d_%H%M')}.pptx"
+
+    jobs_mod.complete_job(
+        job_id,
+        result={
+            "title": sb_data.get("title", topic),
+            "platform": sb_data.get("platform", broadcast_platform),
+            "scenes": len(sb_data.get("scenes", [])),
+            "filename": filename,
+        },
+    )
+
     st.success("라이브커머스 스토리보드 PPT가 생성되었습니다!")
 
-    filename = f"라이브커머스_스토리보드_{topic[:15]}_{datetime.now().strftime('%Y%m%d_%H%M')}.pptx"
     st.download_button(
         label=f"PPT 다운로드  —  {filename}",
         data=ppt_bytes,
